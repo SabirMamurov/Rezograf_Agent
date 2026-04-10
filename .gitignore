@@ -1,6 +1,8 @@
-# Dependencies
-node_modules/
-.pnp
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -8,38 +10,50 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
-# Next.js
-.next/
-out/
-build/
+# testing
+/coverage
 
-# Testing
-coverage/
+# next.js
+/.next/
+/out/
 
-# Environment
-.env*
+# production
+/build
 
-# OS
+# misc
 .DS_Store
+*.pem
 Thumbs.db
 
-# Debug
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# TypeScript
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
 *.tsbuildinfo
 next-env.d.ts
 
 # Prisma generated
-src/generated/prisma
+/src/generated/prisma
 
-# Archives / large data files
+# Database
+*.db
+
+# Archives
 *.zip
+
+# Large data files
 *.txt
 *.csv
+classified_products.json
 
 # Temp scripts
 *.vbs
@@ -48,18 +62,6 @@ convert.ps1
 convert_final.ps1
 convert_safe.ps1
 convert_true_final.ps1
-
-# Vercel
-.vercel
-
-# Database
-*.db
-
-# Large data files
-classified_products.json
-
-# Misc
-*.pem
 
 # Agents
 .agents/
