@@ -3,6 +3,39 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import LabelPreview from "@/components/LabelPreview";
 
+const FolderIcon = ({ className = "w-5 h-5 inline-block" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+    <defs>
+      <linearGradient id="folderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#FDE68A" />
+        <stop offset="100%" stopColor="#F59E0B" />
+      </linearGradient>
+      <linearGradient id="folderBackGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#FBBF24" />
+        <stop offset="100%" stopColor="#D97706" />
+      </linearGradient>
+      <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+        <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.2"/>
+      </filter>
+    </defs>
+    <path d="M4 4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V8.5C22 7.39543 21.1046 6.5 20 6.5H11.5858C11.3206 6.5 11.0663 6.39464 10.8787 6.20711L9.12132 4.45005C8.93378 4.26251 8.67946 4.15715 8.41421 4.15715H4Z" fill="url(#folderBackGrad)" />
+    <path filter="url(#shadow)" d="M2.5 9C2.22386 9 2 9.22386 2 9.5V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V10.5C22 10.2239 21.7761 10 21.5 10H10C9 10 9.5 9 8.5 9H2.5Z" fill="url(#folderGrad)" />
+  </svg>
+);
+
+const LabelItemIcon = ({ className = "w-5 h-5 inline-block" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01" className="text-emerald-500" fill="currentColor" fillOpacity="0.1"/>
+  </svg>
+);
+
+const BackFolderIcon = ({ className = "w-5 h-5 inline-block text-indigo-400" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M9 14L4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
+  </svg>
+);
+
 interface Product {
   id: string;
   sku: string | null;
@@ -159,65 +192,68 @@ export default function PrintPage() {
     setQuery(""); // Close search modal
   };
 
-  /**
-   * Print: clones the LabelPreview into a dedicated #print-area div,
-   * calls window.print(), then cleans up. The @media print CSS in globals.css
-   * hides everything except #print-area.
-   */
-  const handlePrint = useCallback(() => {
-    if (!labelRef.current || !selected) return;
+  const handlePrint = useCallback(async () => {
+    if (!selected) return;
+    
+    // Fallback if not ready
+    if (!labelRef.current) return;
+    
+    setRendering(true);
+    
+    try {
+      const labelClone = labelRef.current.querySelector('.label-preview-frame');
+      if (!labelClone) return;
 
-    // Get dimensions (enforce portrait as we did in rendering)
-    let wMm = selected.template?.widthMm ?? 70;
-    let hMm = selected.template?.heightMm ?? 90;
-    if (wMm > hMm) {
-      const temp = wMm;
-      wMm = hMm;
-      hMm = temp;
+      const clone = labelClone.cloneNode(true) as HTMLElement;
+      clone.style.margin = '0';
+      clone.style.boxShadow = 'none';
+      clone.style.transform = 'none'; // We render it at original scale internally
+      
+      const canvas = clone.querySelector('.canvas') as HTMLElement;
+      if (canvas) {
+        canvas.style.transform = 'none'; 
+      }
+
+      let wMm = selected.template?.widthMm ?? 70;
+      let hMm = selected.template?.heightMm ?? 90;
+      if (wMm > hMm) { const t = wMm; wMm = hMm; hMm = t; }
+
+      const response = await fetch('/api/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          productId: selected.id, 
+          mfgDate: mfgDateFormatted, 
+          expDate: expDateFormatted 
+        })
+      });
+
+      if (!response.ok) throw new Error("Ошибка генерации превью печати");
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      const printIframe = document.createElement('iframe');
+      printIframe.style.position = 'absolute';
+      printIframe.style.width = '0px';
+      printIframe.style.height = '0px';
+      printIframe.style.border = 'none';
+      printIframe.src = url;
+      
+      printIframe.onload = () => {
+        setTimeout(() => {
+          printIframe.contentWindow?.focus();
+          printIframe.contentWindow?.print();
+          // We can remove it after print or just leave it for the session
+        }, 300);
+      };
+      
+      document.body.appendChild(printIframe);
+    } catch (e: any) {
+      setToast({ type: "error", message: e.message || "Ошибка печати." });
+    } finally {
+      setRendering(false);
     }
-
-    // Remove any existing print area constraints
-    const existing = document.getElementById('print-area');
-    if (existing) existing.remove();
-    const existingStyle = document.getElementById('dynamic-print-style');
-    if (existingStyle) existingStyle.remove();
-
-    // Dynamically enforce @page size to prevent Chrome from reverting to A4
-    const printStyles = document.createElement('style');
-    printStyles.id = 'dynamic-print-style';
-    printStyles.innerHTML = `@page { size: ${wMm}mm ${hMm}mm; margin: 0; }`;
-    document.head.appendChild(printStyles);
-
-    // Create print container
-    const printArea = document.createElement('div');
-    printArea.id = 'print-area';
-
-    // Clone the label preview
-    const labelClone = labelRef.current.querySelector('.label-preview-frame');
-    if (!labelClone) return;
-
-    const clone = labelClone.cloneNode(true) as HTMLElement;
-    clone.style.width = labelClone.clientWidth + 'px';
-    clone.style.height = labelClone.clientHeight + 'px';
-    clone.style.margin = '0';
-    clone.style.boxShadow = 'none';
-    clone.style.borderRadius = '0';
-    clone.style.overflow = 'hidden';
-
-    printArea.appendChild(clone);
-    document.body.appendChild(printArea);
-
-    // Print and cleanup
-    setTimeout(() => {
-      window.print();
-      // Cleanup after a short delay to let the print dialog close
-      setTimeout(() => {
-        const el = document.getElementById('print-area');
-        if (el) el.remove();
-        const styleEl = document.getElementById('dynamic-print-style');
-        if (styleEl) styleEl.remove();
-      }, 1000);
-    }, 100);
   }, [selected]);
 
   const handleRenderPdf = async () => {
@@ -239,9 +275,15 @@ export default function PrintPage() {
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setToast({ message: "PDF сгенерирован!", type: "success" });
-      // Revoke URL after a delay
+      
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `etiq-rezograf-${selected.sku || selected.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      setToast({ message: "PDF сохранен!", type: "success" });
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch (err: any) {
       setToast({ message: err.message || "Ошибка генерации", type: "error" });
@@ -503,7 +545,7 @@ export default function PrintPage() {
                     className="hover:text-indigo-500 transition-colors cursor-pointer"
                     onClick={() => setCurrentPath(pathSoFar)}
                   >
-                    {idx === arr.length - 1 ? `📁 ${part}` : part}
+                    {idx === arr.length - 1 ? <><FolderIcon className="w-3.5 h-3.5 inline mr-1"/>{part}</> : part}
                   </button>
                 </span>
               );
@@ -538,7 +580,7 @@ export default function PrintPage() {
                   searchResults.map(p => (
                     <button key={p.id} onClick={() => handleSelect(p)} className="w-full text-left px-5 py-4 hover:bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] transition-colors flex flex-col gap-1.5 cursor-pointer group">
                       <div className="text-[11px] text-indigo-500 font-mono flex gap-2">
-                        <span>📁 {p.category || 'Без папки'}</span> <span className="text-[var(--theme-text-muted)]">/</span> <span>{p.btwFilePath?.split(/[/\\]/).pop()?.replace('.btw', '')}</span>
+                        <span className="flex items-center gap-1.5"><FolderIcon className="w-3.5 h-3.5 -mt-0.5"/> {p.category || 'Без папки'}</span> <span className="text-[var(--theme-text-muted)]">/</span> <span>{p.btwFilePath?.split(/[/\\]/).pop()?.replace('.btw', '')}</span>
                       </div>
                       <div className="font-semibold text-[var(--theme-text)]">{p.name}</div>
                       <div className="text-[11px] text-[var(--theme-text-muted)] flex gap-4 mt-1">
@@ -564,7 +606,7 @@ export default function PrintPage() {
               ➕ Создать этикетку
             </button>
             <button onClick={() => setIsCreatingFolder(true)} className="py-2 px-4 text-[11px] font-bold uppercase tracking-wide bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] rounded-xl shadow-sm transition-all border border-[var(--theme-border)] cursor-pointer flex items-center gap-2">
-              📂 Создать папку
+              <FolderIcon className="w-3.5 h-3.5 mr-1" /> Создать папку
             </button>
           </div>
           <table className="w-full table-fixed divide-y divide-[var(--theme-border)] text-sm">
@@ -598,7 +640,7 @@ export default function PrintPage() {
                   className="hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors group"
                 >
                   <td colSpan={2} className="px-5 py-3.5 font-semibold text-indigo-400 group-hover:text-indigo-300">
-                    <span className="mr-3 opacity-80">🔙</span> На уровень вверх
+                    <span className="mr-3 opacity-80 inline-flex items-center"><BackFolderIcon className="w-5 h-5"/></span> На уровень вверх
                   </td>
                 </tr>
               )}
@@ -625,7 +667,7 @@ export default function PrintPage() {
                   className="hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors"
                 >
                   <td className="px-5 py-3 overflow-hidden text-ellipsis whitespace-nowrap font-medium text-[var(--theme-text)]">
-                    <span className="text-lg mr-3 align-middle filter drop-shadow">📁</span> {f}
+                    <span className="mr-3 align-middle filter drop-shadow"><FolderIcon className="w-[22px] h-[22px] -mt-1"/></span> {f}
                   </td>
                   <td className="px-5 py-3 text-[var(--theme-text-muted)]">—</td>
                 </tr>
@@ -644,7 +686,7 @@ export default function PrintPage() {
                   className={`hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors ${selected?.id === fp.id ? 'bg-indigo-500/10 border-l-[3px] border-indigo-400 shadow-[inset_0_0_20px_rgba(99,102,241,0.05)]' : 'border-l-[3px] border-transparent'}`}
                 >
                   <td className="px-5 py-3 overflow-hidden text-ellipsis whitespace-nowrap">
-                    <span className="text-lg mr-3 align-middle opacity-80 filter drop-shadow">🏷️</span> 
+                    <span className="mr-3 align-middle filter drop-shadow"><LabelItemIcon className="w-[18px] h-[18px] -mt-0.5 text-indigo-400 opacity-80"/></span> 
                     <span className="font-semibold text-[var(--theme-text)]">{fp.btwFilePath ? fp.btwFilePath.split(/[/\\]/).pop()?.replace('.btw', '') : fp.name}</span>
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap overflow-hidden text-ellipsis">
@@ -782,12 +824,17 @@ export default function PrintPage() {
                   <div className="flex gap-3 mt-2">
                     <button 
                       onClick={handlePrint}
-                      className="flex-1 py-3.5 bg-[var(--theme-overlay)] text-[var(--theme-text)] border border-[var(--theme-border)] font-bold rounded-xl hover:bg-[var(--theme-overlay-hover)] transition-all outline-none cursor-pointer flex items-center justify-center gap-2 text-sm shadow-sm"
+                      disabled={rendering}
+                      className="flex-1 py-3.5 bg-[var(--theme-overlay)] text-[var(--theme-text)] border border-[var(--theme-border)] font-bold rounded-xl hover:bg-[var(--theme-overlay-hover)] transition-all outline-none cursor-pointer flex items-center justify-center gap-2 text-sm shadow-sm disabled:opacity-50"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5 opacity-80">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18.75 7.5H5.25" />
-                      </svg>
-                      Печать
+                      {rendering ? <div className="spinner border-white" /> : (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-5 h-5 opacity-80">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18.75 7.5H5.25" />
+                          </svg>
+                          Печать
+                        </>
+                      )}
                     </button>
                     <button 
                       onClick={handleRenderPdf} 
@@ -980,6 +1027,7 @@ export default function PrintPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -405,27 +405,28 @@ body {
     overflow: hidden !important;
   }
 
-  /* 
-   * Strategy: hide all top-level containers, 
-   * then show ONLY the print-area which we create dynamically.
-   * This avoids the visibility:hidden fighting with transforms.
-   */
-  body > * {
-    display: none !important;
+  /* Visibility strategy: hide everything by default */
+  body * {
+    visibility: hidden;
   }
 
-  /* The dedicated print container is always shown */
-  #print-area {
-    display: block !important;
-    position: fixed !important;
+  /* Only show our specific print container and its contents */
+  #react-print-area, #react-print-area * {
+    visibility: visible;
+  }
+
+  /* Reset layout constraints so it prints cleanly */
+  #react-print-area {
+    position: absolute !important;
     left: 0 !important;
     top: 0 !important;
-    z-index: 999999 !important;
-    background: white !important;
-    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
   }
 
-  #print-area .label-preview-frame {
+  /* Make sure the nested label also resets its formatting */
+  #react-print-area .label-preview-frame {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
@@ -434,18 +435,11 @@ body {
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    overflow: hidden !important;
   }
 
-  #print-area .label-preview-frame > div {
-    /* 
-     * Scale virtual canvas (10px per mm) back to physical web pixels.
-     * Scale = (96 DPI / 25.4 mm/in) / 10 = 0.3779527
-     */
+  #react-print-area .label-preview-frame > div.canvas {
     transform: scale(0.37795) !important;
     transform-origin: top left !important;
     background: white !important;
-    margin: 0 !important;
-    padding: 0 !important;
   }
 }

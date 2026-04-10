@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
   let browser;
   try {
     browser = await puppeteer.launch({
+      executablePath: '/snap/bin/chromium',
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
     });
