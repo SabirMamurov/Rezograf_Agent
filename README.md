@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
+  <img src="public/favicon.ico" alt="Rezograf Logo" width="120" />
+  <h1>Rezograf Platform 🖨️</h1>
+  <p><strong>Современная платформа для генерации и управления торговыми этикетками</strong></p>
+</div>
 
-## Getting Started
+---
 
-First, run the development server:
+## 📖 О проекте
+
+**Rezograf** — это внутренняя web-платформа, разработанная для полной автоматизации процесса печати этикеток и термонаклеек (замещение устаревшего ПО вроде BarTender). Платформа предоставляет сотрудникам удобный, высокопроизводительный и красивый интерфейс для управления огромным каталогом продукции, формирования дат, штрих-кодов и мгновенного вывода на печать идеальных этикеток фиксированного размера (по умолчанию `70x90 мм`).
+
+## ✨ Ключевые возможности
+
+- 🗂 **Каталогизация и Управление:** Удобная древовидная структура папок для распределения сотен и тысяч товаров (drag-and-drop сортировка).
+- 🎨 **Современный UI/UX:** Быстрый поиск, динамическая фильтрация, плавная поддержка Светлой и Темной темы оформления.
+- ⚙️ **Промышленная Печать:** Идеально подстроенный рендеринг для термопринтеров (Zebra, Xprinter и др.). Сайт генерирует PDF с точностью до миллиметра без искажений системными драйверами (headless browser rendering).
+- 📊 **Автогенерация Данных:** Встроенный генератор EAN-13 штрих-кодов по ГОСТу, автоматический расчет дат производства (включая будущие/прошедшие даты) и срока годности.
+- 🚀 **Производительность:** Построено на сверхбыстром стеке (Next.js 14 App Router) с локальной базой данных SQLite для молниеносного отклика.
+
+## 🛠 Технологический Стек
+
+- **Frontend:** React, Next.js (App Router), Tailwind CSS
+- **Backend:** Node.js, Next.js Route Handlers
+- **База Данных:** SQLite, Prisma ORM
+- **Печать PDF:** Puppeteer Core (Chromium) / Нативный CSS Print (iframe render)
+- **Иконки & UI:** Heroicons, Custom SVG
+
+## 📦 Установка и Локальный запуск (Development)
+
+1. Клонируйте репозиторий:
+   ```bash
+   git clone https://github.com/SabirMamurov/Rezograf_Agent.git
+   cd Rezograf_Agent
+   ```
+2. Установите зависимости проекта:
+   ```bash
+   npm install
+   ```
+3. Инициализируйте базу данных Prisma:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
+4. Запустите сервер для разработки:
+   ```bash
+   npm run dev
+   ```
+5. Откройте приложение в браузере по адресу `http://localhost:3000`.
+
+## 🖥 Развертывание (Production/Ubuntu)
+
+Серверная часть настроена для бесперебойной работы под управлением `PM2`.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# 1. Сборка оптимизированной версии
+npm run build
+
+# 2. Запуск приложения с помощью PM2 (в background)
+pm2 start npm --name "rezograf" -- run start
+
+# 3. Настройка автозапуска
+pm2 save
+pm2 startup
 ```
+*Внимание:* Для корректной серверной работы генератора PDF (`/api/render`) на Linux необходима установка нативного браузера Chromium: `sudo snap install chromium`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+<div align="center">
+  <i>Разработано специально для оптимизации производственных процессов печати.</i>
+</div>
