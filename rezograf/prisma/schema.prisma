@@ -1,0 +1,47 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Template {
+  id          String    @id @default(uuid())
+  name        String
+  widthMm     Int       @default(90)
+  heightMm    Int       @default(70)
+  htmlContent String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id              String    @id @default(uuid())
+  sku             String?
+  name            String
+  category        String?
+  subcategory     String?
+  composition     String?
+  weight          String?
+  nutritionalInfo String?
+  storageCond     String?
+  manufacturer    String?
+  barcodeEan13    String?
+  btwFilePath     String?
+  certCode        String?
+  quantity        String?
+  boxWeight       String?
+  sponsorText     String?
+
+  templateId String?
+  template   Template? @relation(fields: [templateId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

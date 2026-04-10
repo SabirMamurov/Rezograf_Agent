@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130" fill="black">
+  <!-- Möbius loop recycling triangle - three curved arrows -->
+  <g transform="translate(50,45)" stroke="black" fill="none" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Arrow 1: bottom-left going up -->
+    <path d="M-28,22 L-28,22 Q-32,12 -22,-2 L-8,-26"/>
+    <polygon points="-12,-20 -4,-30 -14,-30" fill="black" stroke="none"/>
+    <!-- Arrow 2: top going down-right -->
+    <path d="M-2,-28 L-2,-28 Q8,-28 18,-14 L28,6"/>
+    <polygon points="24,0 32,8 28,-4" fill="black" stroke="none"/>
+    <!-- Arrow 3: right going left -->
+    <path d="M30,12 L30,12 Q28,24 16,28 L-14,28"/>
+    <polygon points="-8,22 -18,28 -8,34" fill="black" stroke="none"/>
+  </g>
+  <!-- Number 41 -->
+  <text x="50" y="52" font-family="Arial" font-size="26" font-weight="bold" text-anchor="middle">41</text>
+  <!-- ALU text -->
+  <text x="50" y="125" font-family="Arial" font-size="26" font-weight="bold" text-anchor="middle">ALU</text>
+</svg>

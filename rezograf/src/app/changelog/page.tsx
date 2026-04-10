@@ -1,0 +1,102 @@
+"use client";
+
+const LOGS = [
+  {
+    version: "v1.0.0",
+    date: "10 Апреля 2026",
+    title: "Финальный релиз и оптимизация светлой темы",
+    changes: [
+      { type: "feature", text: "Добавлена страница «Обновления системы» для просмотра истории версий." },
+      { type: "fix", text: "Синхронизировано переключение тем: добавлен плавный единый переход между дневным и ночным стилем (Overlay Fade)." },
+      { type: "fix", text: "Адаптирован цвет текста и фона в Каталоге продукции для светлой темы (устранен нечитаемый белый текст)." },
+      { type: "fix", text: "Отключен значок Next.js Dev Indicator в режиме разработки." },
+      { type: "perf", text: "Качественно улучшена производительность загрузки папок за счет новых параметризованных запросов к базе данных (StartsWith)." },
+      { type: "ui", text: "Улучшен дизайн инспектора параметров, убраны «зависающие» темные прямоугольные блоки." }
+    ]
+  },
+  {
+    version: "v0.9.5",
+    date: "9 Апреля 2026",
+    title: "Оптимизация базы данных и каталогов",
+    changes: [
+      { type: "feature", text: "Внедрена архитектура светлой темы с CSS-переменными вместо жестко закодированных классов." },
+      { type: "feature", text: "В таблицах файлов теперь отображается только название и артикул для большего удобства чтения длинных имен." },
+      { type: "perf", text: "Ускорена навигация между папками: исключено чтение всех 1845 файлов в память." },
+      { type: "ui", text: "Разработан новый градиентный логотип и переработана боковая панель навигации (Sidebar)." }
+    ]
+  },
+  {
+    version: "v0.9.0",
+    date: "8 Апреля 2026",
+    title: "Система печати и парсинг",
+    changes: [
+      { type: "feature", text: "Интегрирована генерация PDF для печати в BarTender." },
+      { type: "feature", text: "Динамический масштаб этикеток: автоматический расчет под 70x90мм." },
+      { type: "fix", text: "Исправлены баги парсинга папок и аномалии обработки дат КБЖУ." }
+    ]
+  }
+];
+
+export default function ChangelogPage() {
+  return (
+    <div className="h-[calc(100vh-4rem)] flex flex-col bg-[var(--theme-workspace)] text-[var(--theme-text)] rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden border border-[var(--theme-border)] relative animate-fade-in">
+      {/* Top Bar */}
+      <div className="flex items-center px-8 py-6 bg-[var(--color-surface-panel)]/80 backdrop-blur-xl border-b border-[var(--theme-border)] z-10 shrink-0">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent drop-shadow-sm">
+            История обновлений
+          </h1>
+          <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Официальные патчноуты и новые функции системы Rezograf</p>
+        </div>
+      </div>
+
+      {/* Logs Scroll Area */}
+      <div className="flex-1 overflow-y-auto p-8 z-10 relative">
+        <div className="max-w-4xl mx-auto flex flex-col gap-8">
+          {LOGS.map((log, index) => (
+            <div key={log.version} className="relative pl-8">
+              {/* Timeline dot */}
+              <div className="absolute left-0 top-1.5 bottom-0 flex flex-col items-center">
+                <div className={`w-3.5 h-3.5 rounded-full ${index === 0 ? "bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.6)]" : "bg-[var(--color-text-dim)]"}`}></div>
+                {index !== LOGS.length - 1 && (
+                  <div className="w-0.5 h-full bg-[var(--theme-border)] mt-2"></div>
+                )}
+              </div>
+
+              {/* Card */}
+              <div className="glass-card p-6 border-l-4 border-l-transparent hover:border-l-indigo-500 transition-all group">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className={`text-[12px] font-bold px-2.5 py-0.5 rounded-lg tracking-wider ${index === 0 ? "bg-indigo-500 text-white" : "bg-[var(--theme-overlay)] text-[var(--color-text-muted)] border border-[var(--theme-border)]"}`}>
+                        {log.version}
+                        {index === 0 && <span className="ml-1 text-[10px] uppercase opacity-80">— Актуальная</span>}
+                      </span>
+                      <span className="text-[13px] font-mono text-[var(--color-text-muted)]">{log.date}</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-[var(--theme-text)] group-hover:text-indigo-400 transition-colors">{log.title}</h2>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  {log.changes.map((change, cIdx) => (
+                    <div key={cIdx} className="flex items-start gap-3 bg-[var(--theme-overlay)] p-3 rounded-xl border border-[var(--theme-border)]">
+                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded shadow-sm shrink-0 mt-0.5
+                        ${change.type === "feature" ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : 
+                          change.type === "fix" ? "bg-rose-500/10 text-rose-500 border border-rose-500/20" : 
+                          change.type === "perf" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : 
+                          "bg-cyan-500/10 text-cyan-500 border border-cyan-500/20"}`}>
+                        {change.type === "feature" ? "Новое" : change.type === "fix" ? "Фикс" : change.type === "perf" ? "Оптимизация" : "UI/UX"}
+                      </span>
+                      <span className="text-[13px] text-[var(--theme-text)] leading-relaxed opacity-90">{change.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

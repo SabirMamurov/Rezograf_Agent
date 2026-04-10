@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ВкусВилл — Генератор этикеток</title>
+  <meta name="description" content="Генератор этикеток для отправки продукции в сеть ВкусВилл с автоматической подстановкой даты и штрихкода.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div class="bg-gradient"></div>
+
+  <div class="app-layout">
+    <!-- LEFT: Controls -->
+    <div class="controls-panel">
+      <header class="header">
+        <div class="header__logo">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+          </svg>
+        </div>
+        <h1 class="header__title">Генератор этикеток</h1>
+        <p class="header__subtitle">ВкусВилл · Отгрузка продукции</p>
+      </header>
+
+      <!-- Product -->
+      <div class="card">
+        <div class="card__header">
+          <div class="card__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+            </svg>
+          </div>
+          <div>
+            <div class="card__title">Продукт</div>
+            <div class="card__description">Товар для отгрузки</div>
+          </div>
+        </div>
+        <div class="product-badge">
+          <span class="product-badge__emoji">🌰</span>
+          <div>
+            <div class="product-badge__name">Орехи кедровые очищенные</div>
+            <div class="product-badge__details">100 г · Эко-фабрика Сибирский кедр</div>
+          </div>
+          <div class="product-badge__check">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date -->
+      <div class="card">
+        <div class="card__header">
+          <div class="card__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+          </div>
+          <div>
+            <div class="card__title">Дата изготовления</div>
+            <div class="card__description">Подставится в этикетку и штрихкод</div>
+          </div>
+        </div>
+        <label class="form-label" for="dateInput">Выберите дату</label>
+        <input type="date" id="dateInput" class="date-input" required>
+        <div class="info-row">
+          <span class="info-row__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </span>
+          <span class="info-row__text">
+            ВкусВилл: в штрихкоде <strong>сначала месяц, потом день</strong> (ММДД)
+          </span>
+        </div>
+      </div>
+
+      <!-- Generate -->
+      <button id="generateBtn" class="btn-generate">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+        </svg>
+        Сгенерировать этикетку
+      </button>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button id="printBtn" class="btn-action">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18.75 7.5H5.25" />
+          </svg>
+          Печать
+        </button>
+        <button id="copyBtn" class="btn-action">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+          </svg>
+          Копировать код
+        </button>
+        <button id="btwBtn" class="btn-action">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Скачать PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Label Preview -->
+    <div class="label-preview-wrapper">
+      <div class="preview-title">Предпросмотр этикетки</div>
+
+      <div class="label" id="labelPreview">
+        <!-- Company — centered, wraps like original -->
+        <div class="label__company">
+          ООО "Эко-фабрика Сибирский<br>кедр", т.:(3822) 31-11-75
+        </div>
+        <div class="label__address">
+          Россия, 634593, Томская область, Томский<br>район, д. Петрово, ул. Луговая 11
+        </div>
+
+        <!-- Product Name — centered, bold, underlined -->
+        <div class="label__product-name">Орехи кедровые очищенные</div>
+
+        <!-- Info Block — LEFT aligned -->
+        <div class="label__info-block">
+          <p><strong>Состав:</strong> Ядро кедрового ореха</p>
+          <p><strong>Хранить при t</strong> от +7 до +20 °С и относительной влажности воздуха не более 70 %</p>
+          <p><strong>Срок годности:</strong> 12 месяцев</p>
+          <p><strong>СТО</strong> 97585510-049-2022</p>
+        </div>
+
+        <!-- Weight / Quantity Row -->
+        <div class="label__row">
+          <span><strong>Вес 1 шт:</strong> 100 г</span>
+          <span><strong>Количество шт:</strong> 10</span>
+        </div>
+
+        <!-- Date Row: left = label+hint, right = date value -->
+        <div class="label__date-row">
+          <div class="label__date-left">
+            <span>Дата изготовления</span>
+            <span class="label__date-hint">(день. месяц. год)</span>
+          </div>
+          <span class="label__date-value" id="labelDate">04.03.2026</span>
+        </div>
+
+        <!-- Bottom section: 2-column grid -->
+        <div class="label__bottom">
+          <!-- Top row: icons LEFT, barcode RIGHT -->
+          <div class="label__bottom-icons">
+            <div class="label__icon-item">
+              <img src="icon_pap20.png" alt="PAP 20" class="label__icon-img-recycle">
+            </div>
+            <div class="label__icon-item label__icon-eac">
+              <span class="label__eac-text">EAC</span>
+            </div>
+            <div class="label__icon-item">
+              <img src="icon_food_safe.png" alt="Пищевой контакт" class="label__icon-img-food">
+            </div>
+          </div>
+          <div class="label__bottom-barcode">
+            <svg id="barcodeCanvas"></svg>
+            <div class="label__bottom-digits" id="barcodeNumber">85360000100304</div>
+          </div>
+
+          <!-- Bottom row: 6509 LEFT -->
+          <div class="label__bottom-lot">6509</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
