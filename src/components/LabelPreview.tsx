@@ -116,19 +116,36 @@ export default function LabelPreview({
       >
         <div
           ref={innerRef}
-          className="inner"
+          className="inner label-print-crisp"
           style={{
             width: (V_WIDTH / shrinkScale) + "px",
             transform: `scale(${shrinkScale})`,
             transformOrigin: "top left",
-            fontFamily: "'Arial Narrow', Arial, sans-serif",
+            fontFamily: "'Roboto Condensed', sans-serif",
+            fontWeight: 700,
             color: "black",
-            padding: "18px 20px",
+            padding: "18px 20px 0px 20px",
             display: "flex",
             flexDirection: "column",
             boxSizing: "border-box",
           }}
         >
+          <style dangerouslySetInnerHTML={{__html: `
+            .label-print-crisp, .label-print-crisp * {
+              -webkit-font-smoothing: none !important;
+              -moz-osx-font-smoothing: grayscale !important;
+              text-rendering: geometricPrecision !important;
+              font-smooth: never !important;
+            }
+            .label-print-crisp img {
+              image-rendering: -webkit-optimize-contrast;
+              image-rendering: crisp-edges;
+              image-rendering: pixelated;
+            }
+            .label-print-crisp svg {
+              shape-rendering: crispEdges !important;
+            }
+          `}} />
           {/* TOP ROW: Barcode + Icons & SKU */}
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", marginTop: "2px" }}>
             {/* Barcode */}
@@ -141,24 +158,24 @@ export default function LabelPreview({
               
               <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "center" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/alu41.png" alt="ALU 41" style={{ height: "56px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/alu41.png" alt="ALU 41" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/eac.png" alt="EAC" style={{ height: "56px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/eac.png" alt="EAC" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/fork_glass.png" alt="Food safe" style={{ height: "56px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/fork_glass.png" alt="Food safe" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/pap20.png" alt="PAP 20" style={{ height: "56px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/pap20.png" alt="PAP 20" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
               </div>
 
               {/* SKU (directly under icons, centered, large) */}
               {product.sku && (
                 <div style={{
                   fontSize: "77px",
-                  fontFamily: "Arial",
-                  fontWeight: "normal",
+                  fontFamily: "'Roboto Condensed', sans-serif",
+                  fontWeight: 700,
                   lineHeight: "0.8",
-                  marginTop: "0",
-                  marginBottom: "18px",
+                  marginTop: "8px",
+                  marginBottom: "12px",
                   textAlign: "center",
                   letterSpacing: "-1px"
                 }}>
@@ -169,18 +186,18 @@ export default function LabelPreview({
           </div>
 
           {/* ── Manufacturer info ── */}
-          <div style={{ fontSize: "21px", textAlign: "center", lineHeight: "1.15", marginBottom: "3px", fontStretch: "condensed" }}>
-            Изготовитель: ООО &quot;Эко-фабрика Сибирский Кедр&quot; тел. (3822) 311-175<br />
+          <div style={{ fontSize: "24px", fontWeight: 700, textAlign: "center", lineHeight: "1.15", marginBottom: "3px" }}>
+            Изготовитель: ООО &quot;Эко-фабрика Сибирский Кедр&quot;<br />
+            тел. (3822) 311-175<br />
             Адрес: Россия, 634593, Томская область, Томский район,<br />
             д. Петрово, ул. Луговая, 11
           </div>
 
           {/* ── Product Name ── */}
           <div style={{
-            fontSize: "30px",
-            fontWeight: "bold",
-            fontFamily: "Arial Narrow, sans-serif",
-            fontStretch: "condensed",
+            fontSize: "32px",
+            fontWeight: 900,
+            fontFamily: "'Roboto Condensed', sans-serif",
             textAlign: "center",
             lineHeight: "1.1",
             marginBottom: "3px",
@@ -194,52 +211,51 @@ export default function LabelPreview({
 
           {/* ── Composition (ONLY if different from name) ── */}
           {showComposition && (
-            <div style={{ fontSize: "21px", lineHeight: "1.15", textAlign: "justify", marginBottom: "3px", fontStretch: "condensed" }}>
+            <div style={{ fontSize: "24px", fontWeight: 700, lineHeight: "1.2", textAlign: "left", marginBottom: "3px" }}>
               {product.composition}
             </div>
           )}
 
           {/* ── Sponsor Text ── */}
           {product.sponsorText && (
-            <div style={{ fontSize: "21px", fontWeight: "bold", textAlign: "center", marginBottom: "8px", fontStretch: "condensed", textDecoration: "underline" }}>
+            <div style={{ fontSize: "24px", fontWeight: 900, textAlign: "center", marginBottom: "8px", textDecoration: "underline" }}>
               {product.sponsorText}
             </div>
           )}
 
-          {/* ── Mass / Quantity / BoxWeight / СТО ── */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: "21px", marginBottom: "4px", fontStretch: "condensed", gap: "10px" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
-              {product.weight && <div>{product.weight}</div>}
-              {!product.weight && product.quantity && <div>{product.quantity}</div>}
-              {product.boxWeight && <div>{product.boxWeight}</div>}
-              {!product.weight && !product.quantity && !product.boxWeight && (
-                <div>Масса нетто: —</div>
-              )}
+          {/* ── Mass + СТО on one line ── */}
+          <div style={{ display: "flex", justifyContent: "flex-start", gap: "30px", fontSize: "24px", fontWeight: 700, marginBottom: "2px" }}>
+            <div>
+              {product.weight || (!product.weight && !product.quantity && !product.boxWeight && "Масса нетто: —")}
+              {!product.weight && product.quantity && product.quantity}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", textAlign: "right", gap: "4px" }}>
-              {product.weight && product.quantity && <div>{product.quantity}</div>}
-              {product.certCode && <div>{product.certCode}</div>}
-            </div>
+            {product.certCode && <div>{product.certCode}</div>}
           </div>
+          {product.weight && product.quantity && (
+            <div style={{ fontSize: "24px", fontWeight: 700, marginBottom: "2px" }}>{product.quantity}</div>
+          )}
+          {product.boxWeight && (
+            <div style={{ fontSize: "24px", fontWeight: 700, marginBottom: "2px" }}>{product.boxWeight}</div>
+          )}
 
           {/* ── Nutritional & Storage (no dash when empty) ── */}
           {(product.nutritionalInfo || product.storageCond) && (
-            <div style={{ fontSize: "21px", lineHeight: "1.15", marginBottom: "4px", textAlign: "justify", fontStretch: "condensed" }}>
+            <div style={{ fontSize: "24px", fontWeight: 700, lineHeight: "1.2", marginBottom: "4px", textAlign: "left" }}>
               {product.nutritionalInfo && <span>{product.nutritionalInfo}</span>}
               {product.nutritionalInfo && product.storageCond && <br />}
               {product.storageCond && <span>{product.storageCond}</span>}
             </div>
           )}
 
-          {/* ── Dates ── */}
-          <div style={{ display: "flex", flexDirection: "column", marginTop: "4px", gap: "2px", paddingLeft: "10px" }}>
+          {/* ── Dates — pushed to bottom ── */}
+          <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "-10px", gap: "2px", paddingLeft: "10px" }}>
             <div style={{ display: "flex", alignItems: "baseline" }}>
-              <div style={{ fontSize: "22px", width: "190px", color: "#333" }}>Дата изготовления:</div>
-              <div style={{ fontSize: "44px", fontWeight: "900", fontFamily: "Arial", letterSpacing: "-1px" }}>{mfgDate || "—"}</div>
+              <div style={{ fontSize: "24px", width: "200px", color: "#000", fontWeight: 900 }}>Дата изготовления:</div>
+              <div style={{ fontSize: "44px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{mfgDate || "—"}</div>
             </div>
             <div style={{ display: "flex", alignItems: "baseline" }}>
-              <div style={{ fontSize: "22px", width: "190px", color: "#333" }}>Годен до:</div>
-              <div style={{ fontSize: "44px", fontWeight: "900", fontFamily: "Arial", letterSpacing: "-1px" }}>{expDate || "—"}</div>
+              <div style={{ fontSize: "24px", width: "200px", color: "#000", fontWeight: 900 }}>Годен до:</div>
+              <div style={{ fontSize: "44px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{expDate || "—"}</div>
             </div>
           </div>
         </div>

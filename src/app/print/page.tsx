@@ -84,7 +84,33 @@ function parseShelfLifeMonths(storageCond: string | null): number {
 
 export default function PrintPage() {
   const [query, setQuery] = useState("");
-  const [currentPath, setCurrentPath] = useState<string>(""); 
+  const [currentPath, _setCurrentPath] = useState<string>("");
+
+  const setCurrentPath = useCallback((newPath: string | ((prev: string) => string)) => {
+    _setCurrentPath((prev) => {
+      const nextPath = typeof newPath === "function" ? newPath(prev) : newPath;
+      if (typeof window !== "undefined") {
+        const newHash = nextPath ? `#${encodeURIComponent(nextPath)}` : " ";
+        // Use pushState to avoid jumping if needed, but hash assignment is easier and adds to history
+        if (window.location.hash !== newHash) {
+           window.history.pushState(null, "", newHash === " " ? window.location.pathname + window.location.search : newHash);
+        }
+      }
+      return nextPath;
+    });
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const hash = window.location.hash.replace(/^#/, "");
+      _setCurrentPath(decodeURIComponent(hash));
+    };
+    if (window.location.hash) {
+      onPopState();
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
   const [folders, setFolders] = useState<string[]>([]);
   const [folderProducts, setFolderProducts] = useState<Product[]>([]);
   const [searchResults, setSearchResults] = useState<Product[]>([]);
@@ -195,66 +221,102 @@ export default function PrintPage() {
   const handlePrint = useCallback(async () => {
     if (!selected) return;
     
-    // Fallback if not ready
-    if (!labelRef.current) return;
-    
     setRendering(true);
     
     try {
-      const labelClone = labelRef.current.querySelector('.label-preview-frame');
-      if (!labelClone) return;
-
-      const clone = labelClone.cloneNode(true) as HTMLElement;
-      clone.style.margin = '0';
-      clone.style.boxShadow = 'none';
-      clone.style.transform = 'none'; // We render it at original scale internally
-      
-      const canvas = clone.querySelector('.canvas') as HTMLElement;
-      if (canvas) {
-        canvas.style.transform = 'none'; 
-      }
-
-      let wMm = selected.template?.widthMm ?? 70;
-      let hMm = selected.template?.heightMm ?? 90;
-      if (wMm > hMm) { const t = wMm; wMm = hMm; hMm = t; }
-
+      // Request server-side monochrome image rendering
       const response = await fetch('/api/render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           productId: selected.id, 
           mfgDate: mfgDateFormatted, 
-          expDate: expDateFormatted 
+          expDate: expDateFormatted,
+          format: 'image'
         })
       });
 
-      if (!response.ok) throw new Error("Ошибка генерации превью печати");
+      if (!response.ok) throw new Error("Ошибка генерации изображения для печати");
       
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const imgUrl = window.URL.createObjectURL(blob);
       
+      let wMm = selected.template?.widthMm ?? 70;
+      let hMm = selected.template?.heightMm ?? 90;
+      if (wMm > hMm) { const t = wMm; wMm = hMm; hMm = t; }
+
+      // Create an iframe with just the monochrome image
       const printIframe = document.createElement('iframe');
       printIframe.style.position = 'absolute';
       printIframe.style.width = '0px';
       printIframe.style.height = '0px';
       printIframe.style.border = 'none';
-      printIframe.src = url;
-      
-      printIframe.onload = () => {
-        setTimeout(() => {
-          printIframe.contentWindow?.focus();
-          printIframe.contentWindow?.print();
-          // We can remove it after print or just leave it for the session
-        }, 300);
-      };
-      
       document.body.appendChild(printIframe);
+      
+      const doc = printIframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Печать этикетки</title>
+              <style>
+                @page { size: ${wMm}mm ${hMm}mm; margin: 0; }
+                * { margin: 0; padding: 0; }
+                body { 
+                  margin: 0; 
+                  padding: 0; 
+                  background: white; 
+                  overflow: hidden;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                }
+                img {
+                  width: ${wMm}mm;
+                  height: ${hMm}mm;
+                  display: block;
+                  image-rendering: pixelated;
+                  image-rendering: -webkit-optimize-contrast;
+                }
+              </style>
+            </head>
+            <body>
+              <img src="${imgUrl}" />
+            </body>
+          </html>
+        `);
+        doc.close();
+        
+        // Wait for image to load, then print
+        const imgEl = doc.querySelector('img');
+        const doPrint = () => {
+          setTimeout(() => {
+            printIframe.contentWindow?.focus();
+            printIframe.contentWindow?.print();
+            setRendering(false);
+            setTimeout(() => {
+              window.URL.revokeObjectURL(imgUrl);
+              if (document.body.contains(printIframe)) {
+                document.body.removeChild(printIframe);
+              }
+            }, 3000);
+          }, 300);
+        };
+
+        if (imgEl) {
+          imgEl.onload = doPrint;
+          // Fallback if already loaded  
+          if (imgEl.complete) doPrint();
+        } else {
+          doPrint();
+        }
+      }
     } catch (e: any) {
       setToast({ type: "error", message: e.message || "Ошибка печати." });
-    } finally {
       setRendering(false);
     }
-  }, [selected]);
+  }, [selected, mfgDateFormatted, expDateFormatted]);
 
   const handleRenderPdf = async () => {
     if (!selected) return;
@@ -620,7 +682,7 @@ export default function PrintPage() {
               
               {currentPath !== "" && (
                 <tr 
-                  onClick={() => {
+                  onDoubleClick={() => {
                      const parts = currentPath.split(/[/\\]/).filter(Boolean);
                      parts.pop();
                      setCurrentPath(parts.join('\\'));
@@ -637,9 +699,9 @@ export default function PrintPage() {
                       handleDropMove(JSON.parse(data), parts.join('\\'));
                     }
                   }}
-                  className="hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors group"
+                  className="hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors group select-none"
                 >
-                  <td colSpan={2} className="px-5 py-3.5 font-semibold text-indigo-400 group-hover:text-indigo-300">
+                  <td colSpan={2} className="px-5 py-2 font-semibold text-indigo-400 group-hover:text-indigo-300">
                     <span className="mr-3 opacity-80 inline-flex items-center"><BackFolderIcon className="w-5 h-5"/></span> На уровень вверх
                   </td>
                 </tr>
@@ -649,11 +711,11 @@ export default function PrintPage() {
                 <tr><td colSpan={2} className="p-10 text-center"><div className="spinner mx-auto" /></td></tr>
               )}
 
-              {/* Folders */
-              !loading && folders.map(f => (
+              {/* Folders */}
+              {!loading && folders.map(f => (
                 <tr 
                   key={f} 
-                  onClick={() => setCurrentPath(currentPath ? currentPath + '\\' + f : f)}
+                  onDoubleClick={() => setCurrentPath(currentPath ? currentPath + '\\' + f : f)}
                   onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("bg-indigo-500/20"); }}
                   onDragLeave={(e) => e.currentTarget.classList.remove("bg-indigo-500/20")}
                   onDrop={(e) => {
@@ -664,32 +726,41 @@ export default function PrintPage() {
                       handleDropMove(JSON.parse(data), currentPath ? currentPath + '\\' + f : f);
                     }
                   }}
-                  className="hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors"
+                  className="hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors select-none"
                 >
-                  <td className="px-5 py-3 overflow-hidden text-ellipsis whitespace-nowrap font-medium text-[var(--theme-text)]">
-                    <span className="mr-3 align-middle filter drop-shadow"><FolderIcon className="w-[22px] h-[22px] -mt-1"/></span> {f}
+                  <td className="px-5 py-2 overflow-hidden">
+                    <div className="flex items-center gap-3">
+                      <FolderIcon className="w-[20px] h-[20px] shrink-0 filter drop-shadow opacity-90"/>
+                      <span className="font-medium text-[var(--theme-text)] truncate block w-full leading-relaxed">
+                        {f}
+                      </span>
+                    </div>
                   </td>
-                  <td className="px-5 py-3 text-[var(--theme-text-muted)]">—</td>
+                  <td className="px-5 py-2 text-[var(--theme-text-muted)]">—</td>
                 </tr>
               ))}
 
-              {/* Files */
-              !loading && folderProducts.map(fp => (
+              {/* Files */}
+              {!loading && folderProducts.map(fp => (
                 <tr 
                   key={fp.id} 
-                  onClick={() => handleSelect(fp)} 
+                  onDoubleClick={() => handleSelect(fp)} 
                   draggable={true}
                   onDragStart={(e) => {
                      e.dataTransfer.setData("application/json", JSON.stringify(fp));
                      e.dataTransfer.effectAllowed = "move";
                   }}
-                  className={`hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors ${selected?.id === fp.id ? 'bg-indigo-500/10 border-l-[3px] border-indigo-400 shadow-[inset_0_0_20px_rgba(99,102,241,0.05)]' : 'border-l-[3px] border-transparent'}`}
+                  className={`hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors select-none ${selected?.id === fp.id ? 'bg-indigo-500/10 border-l-[3px] border-indigo-400 shadow-[inset_0_0_20px_rgba(99,102,241,0.05)]' : 'border-l-[3px] border-transparent'}`}
                 >
-                  <td className="px-5 py-3 overflow-hidden text-ellipsis whitespace-nowrap">
-                    <span className="mr-3 align-middle filter drop-shadow"><LabelItemIcon className="w-[18px] h-[18px] -mt-0.5 text-indigo-400 opacity-80"/></span> 
-                    <span className="font-semibold text-[var(--theme-text)]">{fp.btwFilePath ? fp.btwFilePath.split(/[/\\]/).pop()?.replace('.btw', '') : fp.name}</span>
+                  <td className="px-5 py-2 overflow-hidden">
+                    <div className="flex items-center gap-3">
+                      <LabelItemIcon className="w-[18px] h-[18px] text-emerald-500 shadow-sm shrink-0"/>
+                      <span className="font-semibold text-[var(--theme-text)] truncate block w-full leading-relaxed">
+                        {fp.btwFilePath ? fp.btwFilePath.split(/[/\\]/).pop()?.replace('.btw', '') : fp.name}
+                      </span>
+                    </div>
                   </td>
-                  <td className="px-5 py-3 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <td className="px-5 py-2 whitespace-nowrap overflow-hidden text-ellipsis">
                     {fp.sku ? <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-bold tracking-widest">{fp.sku}</span> : <span className="text-[var(--theme-text-muted)]">—</span>}
                   </td>
                 </tr>

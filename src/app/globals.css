@@ -395,51 +395,13 @@ body {
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    -webkit-font-smoothing: none !important;
   }
 
-  /* Hide everything on the page */
   body {
     background: white !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
-  }
-
-  /* Visibility strategy: hide everything by default */
-  body * {
-    visibility: hidden;
-  }
-
-  /* Only show our specific print container and its contents */
-  #react-print-area, #react-print-area * {
-    visibility: visible;
-  }
-
-  /* Reset layout constraints so it prints cleanly */
-  #react-print-area {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-  }
-
-  /* Make sure the nested label also resets its formatting */
-  #react-print-area .label-preview-frame {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
-    border-radius: 0 !important;
-  }
-
-  #react-print-area .label-preview-frame > div.canvas {
-    transform: scale(0.37795) !important;
-    transform-origin: top left !important;
-    background: white !important;
   }
 }

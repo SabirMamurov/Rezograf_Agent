@@ -20,7 +20,7 @@ import * as path from "path";
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { productId, mfgDate, expDate } = body;
+  const { productId, mfgDate, expDate, format } = body;
 
   if (!productId) {
     return NextResponse.json({ error: "productId is required" }, { status: 400 });
@@ -65,16 +65,10 @@ export async function POST(req: NextRequest) {
 
     const page = await browser.newPage();
     await page.setViewport({ width: 800, height: 1200, deviceScaleFactor: 3 });
-    await page.setContent(labelHtml, { waitUntil: "domcontentloaded", timeout: 10000 });
+    await page.setContent(labelHtml, { waitUntil: "networkidle0", timeout: 15000 });
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // ── ADAPTIVE WIDTH-PRESERVING SCALING ──
-    // Outer .canvas is always 700×900 with scale(0.37795) → exact 70×90mm.
-    // If content in .inner overflows 900px, we shrink .inner proportionally:
-    //   - widen it to 700/shrink px (so text reflows at wider width)
-    //   - apply transform: scale(shrink) → after scaling it's 700px × 900px again
-    // Result: content always fills exactly 70×90mm, no whitespace, no clipping.
-
     const contentHeight = await page.evaluate((h) => {
       const inner = document.querySelector('.inner') as HTMLElement;
       return inner ? inner.scrollHeight : h;
@@ -90,7 +84,6 @@ export async function POST(req: NextRequest) {
         const inner = document.querySelector('.inner') as HTMLElement;
         const canvas = document.querySelector('.canvas') as HTMLElement;
         if (inner) {
-          // Widen inner so after scale(shrink) it maps back to original width
           inner.style.width = (vw / s) + 'px';
           inner.style.transform = `scale(${s})`;
           inner.style.transformOrigin = 'top left';
@@ -101,7 +94,6 @@ export async function POST(req: NextRequest) {
         }
       }, shrink, BASE_SCALE, vWidth);
     } else {
-      // Content fits — just apply the standard outer scale
       await page.evaluate((scale: number) => {
         const canvas = document.querySelector('.canvas') as HTMLElement;
         if (canvas) {
@@ -111,9 +103,112 @@ export async function POST(req: NextRequest) {
       }, BASE_SCALE);
     }
 
-    // Brief pause for layout recalculation
     await new Promise(resolve => setTimeout(resolve, 200));
 
+    // ── IMAGE FORMAT: Ultra-high-res monochrome bitmap for thermal printers ──
+    if (format === 'image') {
+      // Target printer DPI (203 is standard for most thermal label printers)
+      const PRINTER_DPI = 203;
+      const targetW = Math.round((widthMm / 25.4) * PRINTER_DPI);  // 559 px for 70mm
+      const targetH = Math.round((heightMm / 25.4) * PRINTER_DPI); // 719 px for 90mm
+
+      // Create a dedicated super-high-DPI page for maximum quality rendering
+      const hiResPage = await browser!.newPage();
+      await hiResPage.setViewport({ width: 800, height: 1200, deviceScaleFactor: 12 });
+      await hiResPage.setContent(labelHtml, { waitUntil: "networkidle0", timeout: 15000 });
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      // Apply the same adaptive scaling
+      const hiContentHeight = await hiResPage.evaluate((h) => {
+        const inner = document.querySelector('.inner') as HTMLElement;
+        return inner ? inner.scrollHeight : h;
+      }, heightMm * 10);
+
+      if (hiContentHeight > vHeight) {
+        const shrink = vHeight / hiContentHeight;
+        await hiResPage.evaluate((s: number, bs: number, vw: number) => {
+          const inner = document.querySelector('.inner') as HTMLElement;
+          const canvas = document.querySelector('.canvas') as HTMLElement;
+          if (inner) {
+            inner.style.width = (vw / s) + 'px';
+            inner.style.transform = `scale(${s})`;
+            inner.style.transformOrigin = 'top left';
+          }
+          if (canvas) {
+            canvas.style.transform = `scale(${bs})`;
+            canvas.style.transformOrigin = 'top left';
+          }
+        }, shrink, BASE_SCALE, vWidth);
+      } else {
+        await hiResPage.evaluate((scale: number) => {
+          const canvas = document.querySelector('.canvas') as HTMLElement;
+          if (canvas) {
+            canvas.style.transform = `scale(${scale})`;
+            canvas.style.transformOrigin = 'top left';
+          }
+        }, BASE_SCALE);
+      }
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Step 1: Take screenshot at ~1150 DPI (12× scale)
+      const clipW = Math.round((widthMm / 25.4) * 96);
+      const clipH = Math.round((heightMm / 25.4) * 96);
+
+      const screenshotBuffer = await hiResPage.screenshot({
+        type: 'png',
+        clip: { x: 0, y: 0, width: clipW, height: clipH },
+      });
+
+      // Step 2: Threshold to pure B&W + nearest-neighbor downsample to exact printer DPI
+      const base64Screenshot = Buffer.from(screenshotBuffer).toString('base64');
+      const monoBase64 = await hiResPage.evaluate(async (imgData: string, tW: number, tH: number) => {
+        const img = new Image();
+        img.src = 'data:image/png;base64,' + imgData;
+        await new Promise(resolve => { img.onload = resolve; });
+
+        // First: draw at original hi-res size and apply threshold
+        const bigCanvas = document.createElement('canvas');
+        bigCanvas.width = img.width;
+        bigCanvas.height = img.height;
+        const bigCtx = bigCanvas.getContext('2d')!;
+        bigCtx.drawImage(img, 0, 0);
+
+        const bigData = bigCtx.getImageData(0, 0, bigCanvas.width, bigCanvas.height);
+        const px = bigData.data;
+        for (let i = 0; i < px.length; i += 4) {
+          const gray = px[i] * 0.299 + px[i+1] * 0.587 + px[i+2] * 0.114;
+          const val = gray < 120 ? 0 : 255;
+          px[i] = val;
+          px[i+1] = val;
+          px[i+2] = val;
+          px[i+3] = 255;
+        }
+        bigCtx.putImageData(bigData, 0, 0);
+
+        // Second: downsample to exact printer resolution using nearest-neighbor
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = tW;
+        outCanvas.height = tH;
+        const outCtx = outCanvas.getContext('2d')!;
+        outCtx.imageSmoothingEnabled = false; // NEAREST NEIGHBOR — no interpolation!
+        outCtx.drawImage(bigCanvas, 0, 0, tW, tH);
+
+        return outCanvas.toDataURL('image/png').split(',')[1];
+      }, base64Screenshot, targetW, targetH);
+
+      await hiResPage.close();
+
+      const monoPngBuffer = Buffer.from(monoBase64, 'base64');
+
+      return new NextResponse(monoPngBuffer, {
+        headers: {
+          "Content-Type": "image/png",
+          "Content-Disposition": `inline; filename="label-${product.sku || product.id}.png"`,
+        },
+      });
+    }
+
+    // ── PDF FORMAT (default) ──
     const pdfBuffer = await page.pdf({
       width: `${widthMm}mm`,
       height: `${heightMm}mm`,
@@ -197,12 +292,23 @@ function buildLabelHtml(
 <html>
 <head>
 <meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700;900&subset=cyrillic,cyrillic-ext,latin&display=swap" rel="stylesheet">
 <style>
   @page {
     size: ${widthMm}mm ${heightMm}mm;
     margin: 0;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+    -webkit-font-smoothing: none !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    text-rendering: geometricPrecision !important;
+    font-smooth: never !important;
+  }
   html, body {
     width: ${widthMm}mm;
     height: ${heightMm}mm;
@@ -220,22 +326,23 @@ function buildLabelHtml(
     width: ${widthMm * 10}px;
     height: ${heightMm * 10}px;
     box-sizing: border-box;
-    /* transform set by Puppeteer: scale(0.37795) → 70×90mm */
   }
   .inner {
     width: ${widthMm * 10}px;
-    /* NO height limit — content flows freely for measurement */
-    font-family: 'Arial Narrow', Arial, sans-serif;
+    font-family: 'Roboto Condensed', sans-serif;
+    font-weight: 700;
     color: black;
-    padding: 18px 20px;
+    padding: 18px 20px 0px 20px;
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    /* If content overflows 900px, Puppeteer applies shrink transform */
   }
   img {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
   }
 </style>
 </head>
@@ -253,15 +360,15 @@ function buildLabelHtml(
         <!-- Right side: Icons + SKU -->
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 320px; height: 160px; padding-top: 2px;">
           <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
-            <img src="${alu41Src}" style="height: 56px; width: auto; display: block; object-fit: contain;" />
-            <img src="${eacSrc}" style="height: 56px; width: auto; display: block; object-fit: contain;" />
-            <img src="${forkGlassSrc}" style="height: 56px; width: auto; display: block; object-fit: contain;" />
-            <img src="${pap20Src}" style="height: 56px; width: auto; display: block; object-fit: contain;" />
+            <img src="${alu41Src}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
+            <img src="${eacSrc}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
+            <img src="${forkGlassSrc}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
+            <img src="${pap20Src}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
           </div>
           
           <!-- SKU -->
           ${product.sku ? `
-          <div style="font-size: 77px; font-weight: normal; font-family: Arial; line-height: 0.8; margin-top: 0; margin-bottom: 18px; text-align: center; letter-spacing: -1px;">
+          <div style="font-size: 77px; font-weight: 700; font-family: 'Roboto Condensed', sans-serif; line-height: 0.8; margin-top: 8px; margin-bottom: 12px; text-align: center; letter-spacing: -1px;">
             ${escapeHtml(product.sku)}
           </div>
           ` : ''}
@@ -269,63 +376,62 @@ function buildLabelHtml(
       </div>
 
       <!-- Manufacturer info -->
-      <div style="font-size: 21px; text-align: center; line-height: 1.15; margin-bottom: 3px; font-stretch: condensed;">
-        Изготовитель: ООО &quot;Эко-фабрика Сибирский Кедр&quot; тел. (3822) 311-175<br />
+      <div style="font-size: 24px; font-weight: 700; text-align: center; line-height: 1.15; margin-bottom: 3px;">
+        Изготовитель: ООО &quot;Эко-фабрика Сибирский Кедр&quot;<br />
+        тел. (3822) 311-175<br />
         Адрес: Россия, 634593, Томская область, Томский район,<br />
         д. Петрово, ул. Луговая, 11
       </div>
 
       <!-- Product Name -->
-      <div style="font-size: 30px; font-family: 'Arial Narrow', Arial, sans-serif; font-weight: bold; font-stretch: condensed; text-decoration: underline; text-align: center; line-height: 1.1; min-height: 30px; flex-shrink: 0; margin-bottom: 3px; text-underline-offset: 3px;">
+      <div style="font-size: 32px; font-family: 'Roboto Condensed', sans-serif; font-weight: 900; text-decoration: underline; text-align: center; line-height: 1.1; min-height: 30px; flex-shrink: 0; margin-bottom: 3px; text-underline-offset: 3px;">
         ${escapeHtml(product.name)}
       </div>
 
       <!-- Composition -->
       ${showComposition ? `
-      <div style="font-size: 21px; line-height: 1.15; text-align: justify; margin-bottom: 3px; font-stretch: condensed;">
+      <div style="font-size: 24px; font-weight: 700; line-height: 1.2; text-align: left; margin-bottom: 3px;">
         ${escapeHtml(product.composition || "")}
       </div>
       ` : ''}
 
       <!-- Sponsor Text -->
       ${product.sponsorText ? `
-      <div style="font-size: 21px; font-weight: bold; text-align: center; margin-bottom: 8px; font-stretch: condensed; text-decoration: underline;">
+      <div style="font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 8px; text-decoration: underline;">
         ${escapeHtml(product.sponsorText)}
       </div>
       ` : ''}
 
-      <!-- Mass / Quantity / BoxWeight / СТО -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; font-size: 21px; margin-bottom: 4px; font-stretch: condensed; gap: 10px;">
-        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-          ${product.weight ? `<div>${escapeHtml(product.weight)}</div>` : ''}
-          ${!product.weight && product.quantity ? `<div>${escapeHtml(product.quantity)}</div>` : ''}
-          ${product.boxWeight ? `<div>${escapeHtml(product.boxWeight)}</div>` : ''}
-          ${!product.weight && !product.quantity && !product.boxWeight ? `<div>Масса нетто: —</div>` : ''}
+      <!-- Mass + СТО on one line -->
+      <div style="display: flex; justify-content: flex-start; gap: 30px; font-size: 24px; font-weight: 700; margin-bottom: 2px;">
+        <div>
+          ${product.weight ? escapeHtml(product.weight) : ''}
+          ${!product.weight && product.quantity ? escapeHtml(product.quantity) : ''}
+          ${!product.weight && !product.quantity && !product.boxWeight ? 'Масса нетто: —' : ''}
         </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 4px;">
-          ${product.weight && product.quantity ? `<div>${escapeHtml(product.quantity)}</div>` : ''}
-          ${product.certCode ? `<div>${escapeHtml(product.certCode)}</div>` : ''}
-        </div>
+        ${product.certCode ? `<div>${escapeHtml(product.certCode)}</div>` : ''}
       </div>
+      ${product.weight && product.quantity ? `<div style="font-size: 24px; font-weight: 700; margin-bottom: 2px;">${escapeHtml(product.quantity)}</div>` : ''}
+      ${product.boxWeight ? `<div style="font-size: 24px; font-weight: 700; margin-bottom: 2px;">${escapeHtml(product.boxWeight)}</div>` : ''}
 
       <!-- Nutritional & Storage -->
       ${(product.nutritionalInfo || product.storageCond) ? `
-      <div style="font-size: 21px; line-height: 1.15; margin-bottom: 4px; text-align: justify; font-stretch: condensed;">
+      <div style="font-size: 24px; font-weight: 700; line-height: 1.2; margin-bottom: 4px; text-align: left;">
         ${product.nutritionalInfo ? `<span>${escapeHtml(product.nutritionalInfo)}</span>` : ''}
         ${(product.nutritionalInfo && product.storageCond) ? `<br />` : ''}
         ${product.storageCond ? `<span>${escapeHtml(product.storageCond)}</span>` : ''}
       </div>
       ` : ''}
 
-      <!-- Dates -->
-      <div style="display: flex; flex-direction: column; margin-top: 4px; gap: 2px; padding-left: 10px;">
+      <!-- Dates — pushed to bottom to align with QR code sticker -->
+      <div style="display: flex; flex-direction: column; margin-top: auto; margin-bottom: -10px; gap: 2px; padding-left: 10px;">
         <div style="display: flex; align-items: baseline;">
-          <div style="font-size: 22px; width: 190px; color: #333;">Дата изготовления:</div>
-          <div style="font-size: 44px; font-weight: 900; font-family: Arial; letter-spacing: -1px;">${escapeHtml(mfgDate || "—")}</div>
+          <div style="font-size: 24px; width: 200px; color: #000; font-weight: 900;">Дата изготовления:</div>
+          <div style="font-size: 44px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(mfgDate || "—")}</div>
         </div>
         <div style="display: flex; align-items: baseline;">
-          <div style="font-size: 22px; width: 190px; color: #333;">Годен до:</div>
-          <div style="font-size: 44px; font-weight: 900; font-family: Arial; letter-spacing: -1px;">${escapeHtml(expDate || "—")}</div>
+          <div style="font-size: 24px; width: 200px; color: #000; font-weight: 900;">Годен до:</div>
+          <div style="font-size: 44px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(expDate || "—")}</div>
         </div>
       </div>
       </div>
