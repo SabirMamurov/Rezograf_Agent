@@ -247,16 +247,12 @@ export default function LabelPreview({
             </div>
           )}
 
-          {/* ── Dates — pushed to bottom ── */}
-          <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "-10px", gap: "2px", paddingLeft: "10px" }}>
-            <div style={{ display: "flex", alignItems: "baseline" }}>
-              <div style={{ fontSize: "24px", width: "200px", color: "#000", fontWeight: 900 }}>Дата изготовления:</div>
-              <div style={{ fontSize: "44px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{mfgDate || "—"}</div>
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline" }}>
-              <div style={{ fontSize: "24px", width: "200px", color: "#000", fontWeight: 900 }}>Годен до:</div>
-              <div style={{ fontSize: "44px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{expDate || "—"}</div>
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
+            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
+            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{mfgDate || "—"}</div>
+            
+            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
+            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{expDate || "—"}</div>
           </div>
         </div>
       </div>

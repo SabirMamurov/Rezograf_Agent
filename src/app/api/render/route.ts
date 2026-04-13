@@ -424,15 +424,12 @@ function buildLabelHtml(
       ` : ''}
 
       <!-- Dates — pushed to bottom to align with QR code sticker -->
-      <div style="display: flex; flex-direction: column; margin-top: auto; margin-bottom: -10px; gap: 2px; padding-left: 10px;">
-        <div style="display: flex; align-items: baseline;">
-          <div style="font-size: 24px; width: 200px; color: #000; font-weight: 900;">Дата изготовления:</div>
-          <div style="font-size: 44px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(mfgDate || "—")}</div>
-        </div>
-        <div style="display: flex; align-items: baseline;">
-          <div style="font-size: 24px; width: 200px; color: #000; font-weight: 900;">Годен до:</div>
-          <div style="font-size: 44px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(expDate || "—")}</div>
-        </div>
+      <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">
+        <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Дата изготовления:</div>
+        <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(mfgDate || "—")}</div>
+        
+        <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Годен до:</div>
+        <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(expDate || "—")}</div>
       </div>
       </div>
     </div>
