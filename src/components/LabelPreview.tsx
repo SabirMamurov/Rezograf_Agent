@@ -170,7 +170,7 @@ export default function LabelPreview({
               {/* SKU (directly under icons, centered, large) */}
               {product.sku && (
                 <div style={{
-                  fontSize: "77px",
+                  fontSize: "88px",
                   fontFamily: "'Roboto Condensed', sans-serif",
                   fontWeight: 700,
                   lineHeight: "0.8",

@@ -393,7 +393,7 @@ function buildLabelHtml(
           
           <!-- SKU -->
           ${product.sku ? `
-          <div style="font-size: 77px; font-weight: 700; font-family: 'Roboto Condensed', sans-serif; line-height: 0.8; margin-top: 8px; margin-bottom: 12px; text-align: center; letter-spacing: -1px;">
+          <div style="font-size: 88px; font-weight: 700; font-family: 'Roboto Condensed', sans-serif; line-height: 0.8; margin-top: 8px; margin-bottom: 12px; text-align: center; letter-spacing: -1px;">
             ${escapeHtml(product.sku)}
           </div>
           ` : ''}
