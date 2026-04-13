@@ -5,6 +5,27 @@ import puppeteer from "puppeteer";
 import * as fs from "fs";
 import * as path from "path";
 
+// Global cache to avoid launching a new browser per request
+let globalBrowser: any = null;
+let isDev = process.env.NODE_ENV !== "production";
+
+async function getBrowser() {
+  if (globalBrowser && globalBrowser.connected) {
+    return globalBrowser;
+  }
+  globalBrowser = await puppeteer.launch({
+    executablePath: '/snap/bin/chromium',
+    headless: true,
+    args: [
+      "--no-sandbox", 
+      "--disable-setuid-sandbox", 
+      "--disable-gpu", 
+      "--disable-dev-shm-usage"
+    ],
+  });
+  return globalBrowser;
+}
+
 /**
  * POST /api/render
  * Body: { productId: string, mfgDate?: string, expDate?: string }
@@ -55,21 +76,23 @@ export async function POST(req: NextRequest) {
   const iconDataUris = loadIconsAsBase64();
   const labelHtml = buildLabelHtml(product, barcodeSvg, widthMm, heightMm, mfgDate, expDate, iconDataUris);
 
-  let browser;
+  let page;
   try {
-    browser = await puppeteer.launch({
-      executablePath: '/snap/bin/chromium',
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+    const browser = await getBrowser();
+
+    page = await browser.newPage();
+    await page.setViewport({ width: 800, height: 1200, deviceScaleFactor: 3 });
+    
+    // Use domcontentloaded instead of networkidle0 for much faster loading
+    await page.setContent(labelHtml, { waitUntil: "domcontentloaded", timeout: 15000 });
+    
+    // Explicitly wait for fonts to load instead of arbitrary setTimeout
+    await page.evaluate(async () => {
+      await document.fonts.ready;
     });
 
-    const page = await browser.newPage();
-    await page.setViewport({ width: 800, height: 1200, deviceScaleFactor: 3 });
-    await page.setContent(labelHtml, { waitUntil: "networkidle0", timeout: 15000 });
-    await new Promise(resolve => setTimeout(resolve, 500));
-
     // ── ADAPTIVE WIDTH-PRESERVING SCALING ──
-    const contentHeight = await page.evaluate((h) => {
+    const contentHeight = await page.evaluate((h: number) => {
       const inner = document.querySelector('.inner') as HTMLElement;
       return inner ? inner.scrollHeight : h;
     }, heightMm * 10);
@@ -103,7 +126,7 @@ export async function POST(req: NextRequest) {
       }, BASE_SCALE);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+
 
     // ── IMAGE FORMAT: Ultra-high-res monochrome bitmap for thermal printers ──
     if (format === 'image') {
@@ -113,13 +136,15 @@ export async function POST(req: NextRequest) {
       const targetH = Math.round((heightMm / 25.4) * PRINTER_DPI); // 719 px for 90mm
 
       // Create a dedicated super-high-DPI page for maximum quality rendering
-      const hiResPage = await browser!.newPage();
+      const hiResPage = await browser.newPage();
       await hiResPage.setViewport({ width: 800, height: 1200, deviceScaleFactor: 12 });
-      await hiResPage.setContent(labelHtml, { waitUntil: "networkidle0", timeout: 15000 });
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await hiResPage.setContent(labelHtml, { waitUntil: "domcontentloaded", timeout: 15000 });
+      await hiResPage.evaluate(async () => {
+        await document.fonts.ready;
+      });
 
       // Apply the same adaptive scaling
-      const hiContentHeight = await hiResPage.evaluate((h) => {
+      const hiContentHeight = await hiResPage.evaluate((h: number) => {
         const inner = document.querySelector('.inner') as HTMLElement;
         return inner ? inner.scrollHeight : h;
       }, heightMm * 10);
@@ -148,7 +173,6 @@ export async function POST(req: NextRequest) {
           }
         }, BASE_SCALE);
       }
-      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Step 1: Take screenshot at ~1150 DPI (12× scale)
       const clipW = Math.round((widthMm / 25.4) * 96);
@@ -228,7 +252,8 @@ export async function POST(req: NextRequest) {
     console.error("PDF render error:", err);
     return NextResponse.json({ error: message }, { status: 500 });
   } finally {
-    if (browser) await browser.close();
+    if (page) await page.close().catch(() => {});
+    // We intentionally DO NOT close the browser here, keeping it warm for the next print job!
   }
 }
 
