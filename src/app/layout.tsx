@@ -14,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru" suppressHydrationWarning>
+    <html lang="ru" className="light" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -34,10 +34,10 @@ export default function RootLayout({
               (function() {
                 try {
                   var theme = localStorage.getItem('rezograf-theme');
-                  if (theme === 'light') {
-                    document.documentElement.classList.add('light');
-                  } else {
+                  if (theme === 'dark') {
                     document.documentElement.classList.remove('light');
+                  } else {
+                    document.documentElement.classList.add('light');
                   }
                 } catch (e) {}
               })();
