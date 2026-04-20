@@ -2,28 +2,122 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateBarcodeSvg } from "@/lib/barcodes";
 import puppeteer from "puppeteer";
+import sharp from "sharp";
 import * as fs from "fs";
 import * as path from "path";
 
 // Global cache to avoid launching a new browser per request
 let globalBrowser: any = null;
-let isDev = process.env.NODE_ENV !== "production";
+
+// ── FONT EMBEDDING ─────────────────────────────────────────────────────
+// Fetch Roboto Condensed once and keep it as an inline @font-face CSS
+// string. Every subsequent label render reuses the cached copy instead of
+// hitting fonts.googleapis.com + fonts.gstatic.com on every page load.
+// This removes the per-request DNS/TLS/HTTP round-trip that was a major
+// chunk of the old latency.
+let fontCssPromise: Promise<string> | null = null;
+
+async function getEmbeddedFontCss(): Promise<string> {
+  if (!fontCssPromise) {
+    fontCssPromise = (async () => {
+      try {
+        const cssUrl =
+          "https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700;900&subset=cyrillic,cyrillic-ext,latin&display=swap";
+        // Modern Chrome UA → Google returns compressed woff2 URLs (~20-30KB
+        // each) instead of raw ttf (~120KB). Cuts the embedded payload 4×.
+        const chromeUa =
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+        const cssRes = await fetch(cssUrl, { headers: { "User-Agent": chromeUa } });
+        let css = await cssRes.text();
+        // Match any font binary URL on gstatic (woff2, ttf, otf, woff…)
+        const urls = Array.from(
+          css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)\s]+)\)/g)
+        ).map((m) => m[1]);
+        const uniqueUrls = Array.from(new Set(urls));
+        await Promise.all(
+          uniqueUrls.map(async (url) => {
+            const buf = await fetch(url).then((r) => r.arrayBuffer());
+            const mime = url.endsWith(".woff2")
+              ? "font/woff2"
+              : url.endsWith(".ttf")
+              ? "font/ttf"
+              : url.endsWith(".woff")
+              ? "font/woff"
+              : "application/octet-stream";
+            const b64 = Buffer.from(buf).toString("base64");
+            css = css.split(url).join(`data:${mime};base64,${b64}`);
+          })
+        );
+        console.log(
+          `[render] embedded ${uniqueUrls.length} font file(s), css size ${css.length} bytes`
+        );
+        return css;
+      } catch (e) {
+        console.warn("Font preload failed; falling back to CDN:", e);
+        return "";
+      }
+    })();
+  }
+  return fontCssPromise;
+}
+// Kick off font preload at module init so the first real request doesn't
+// pay for it.
+getEmbeddedFontCss().catch(() => {});
+
+/**
+ * Resolve the Chromium executable:
+ *  - PUPPETEER_EXECUTABLE_PATH env var always wins
+ *  - On Linux prod we use the snap-installed chromium at /snap/bin/chromium
+ *    (only if it exists — otherwise fall back to Puppeteer's bundled binary)
+ *  - On macOS / Windows / dev we let puppeteer use its bundled Chromium
+ *    (executablePath undefined → Puppeteer picks its own download)
+ */
+function resolveChromiumPath(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (process.platform === "linux" && fs.existsSync("/snap/bin/chromium")) {
+    return "/snap/bin/chromium";
+  }
+  return undefined;
+}
 
 async function getBrowser() {
   if (globalBrowser && globalBrowser.connected) {
     return globalBrowser;
   }
+  const executablePath = resolveChromiumPath();
   globalBrowser = await puppeteer.launch({
-    executablePath: '/snap/bin/chromium',
+    ...(executablePath ? { executablePath } : {}),
     headless: true,
     args: [
-      "--no-sandbox", 
-      "--disable-setuid-sandbox", 
-      "--disable-gpu", 
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-gpu",
       "--disable-dev-shm-usage"
     ],
   });
   return globalBrowser;
+}
+
+// ── PAGE REUSE ─────────────────────────────────────────────────────────
+// Creating a new Puppeteer target takes ~500-600ms on macOS. We keep a
+// single long-lived page and serialize renders through a promise-chain
+// mutex so every request after the first only pays for setContent +
+// screenshot (~400ms), not newPage.
+let warmPage: any = null;
+let renderQueue: Promise<unknown> = Promise.resolve();
+
+async function getWarmPage(browser: any) {
+  if (warmPage && !warmPage.isClosed()) return warmPage;
+  warmPage = await browser.newPage();
+  return warmPage;
+}
+
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const next = renderQueue.then(fn, fn);
+  renderQueue = next.catch(() => {});
+  return next as Promise<T>;
 }
 
 /**
@@ -74,157 +168,109 @@ export async function POST(req: NextRequest) {
     heightMm = temp;
   }
   const iconDataUris = loadIconsAsBase64();
-  const labelHtml = buildLabelHtml(product, barcodeSvg, widthMm, heightMm, mfgDate, expDate, iconDataUris);
+  const fontCss = await getEmbeddedFontCss();
+  const labelHtml = buildLabelHtml(
+    product,
+    barcodeSvg,
+    widthMm,
+    heightMm,
+    mfgDate,
+    expDate,
+    iconDataUris,
+    fontCss
+  );
 
-  let page;
-  try {
+  // Viewport sized to just fit the label area (widthMm * 10 virtual px wide)
+  // + a small slack for vertical overflow before scaling kicks in.
+  // Old code used 800×1200 which at dsf=12 captured ~138M unused pixels.
+  const vpWidth = widthMm * 10;
+  const vpHeight = Math.max(heightMm * 10 * 2, 2000);
+
+  // Image path needs a super-sampled raster; PDF path is vector so dsf=3 is fine.
+  const dsf = format === "image" ? 12 : 3;
+
+  return serialize(async () => {
+    try {
     const browser = await getBrowser();
+    const page = await getWarmPage(browser);
+    await page.setViewport({ width: vpWidth, height: vpHeight, deviceScaleFactor: dsf });
 
-    page = await browser.newPage();
-    await page.setViewport({ width: 800, height: 1200, deviceScaleFactor: 3 });
-    
-    // Use domcontentloaded instead of networkidle0 for much faster loading
+    // domcontentloaded + explicit fonts.ready is faster than networkidle0.
+    // With fonts inlined as data: URIs above, fonts.ready resolves almost
+    // instantly instead of waiting on fonts.gstatic.com.
     await page.setContent(labelHtml, { waitUntil: "domcontentloaded", timeout: 15000 });
-    
-    // Explicitly wait for fonts to load instead of arbitrary setTimeout
     await page.evaluate(async () => {
       await document.fonts.ready;
     });
 
     // ── ADAPTIVE WIDTH-PRESERVING SCALING ──
-    const contentHeight = await page.evaluate((h: number) => {
-      const inner = document.querySelector('.inner') as HTMLElement;
-      return inner ? inner.scrollHeight : h;
-    }, heightMm * 10);
-
+    // Measure real content height and uniformly shrink if it overflows the
+    // physical label area. Otherwise apply only the CSS→mm base scale.
     const vWidth = widthMm * 10;
     const vHeight = heightMm * 10;
     const BASE_SCALE = ((widthMm / 25.4) * 96) / vWidth; // ≈ 0.37795
 
+    const contentHeight: number = await page.evaluate((h: number) => {
+      const inner = document.querySelector(".inner") as HTMLElement;
+      return inner ? inner.scrollHeight : h;
+    }, vHeight);
+
     if (contentHeight > vHeight) {
       const shrink = vHeight / contentHeight;
-      await page.evaluate((s: number, bs: number, vw: number) => {
-        const inner = document.querySelector('.inner') as HTMLElement;
-        const canvas = document.querySelector('.canvas') as HTMLElement;
-        if (inner) {
-          inner.style.width = (vw / s) + 'px';
-          inner.style.transform = `scale(${s})`;
-          inner.style.transformOrigin = 'top left';
-        }
-        if (canvas) {
-          canvas.style.transform = `scale(${bs})`;
-          canvas.style.transformOrigin = 'top left';
-        }
-      }, shrink, BASE_SCALE, vWidth);
+      await page.evaluate(
+        (s: number, bs: number, vw: number) => {
+          const inner = document.querySelector(".inner") as HTMLElement;
+          const canvas = document.querySelector(".canvas") as HTMLElement;
+          if (inner) {
+            inner.style.width = vw / s + "px";
+            inner.style.transform = `scale(${s})`;
+            inner.style.transformOrigin = "top left";
+          }
+          if (canvas) {
+            canvas.style.transform = `scale(${bs})`;
+            canvas.style.transformOrigin = "top left";
+          }
+        },
+        shrink,
+        BASE_SCALE,
+        vWidth
+      );
     } else {
       await page.evaluate((scale: number) => {
-        const canvas = document.querySelector('.canvas') as HTMLElement;
+        const canvas = document.querySelector(".canvas") as HTMLElement;
         if (canvas) {
           canvas.style.transform = `scale(${scale})`;
-          canvas.style.transformOrigin = 'top left';
+          canvas.style.transformOrigin = "top left";
         }
       }, BASE_SCALE);
     }
 
-
-
-    // ── IMAGE FORMAT: Ultra-high-res monochrome bitmap for thermal printers ──
-    if (format === 'image') {
-      // Target printer DPI (203 is standard for most thermal label printers)
+    // ── IMAGE FORMAT: Monochrome bitmap for thermal printers ──
+    if (format === "image") {
       const PRINTER_DPI = 203;
-      const targetW = Math.round((widthMm / 25.4) * PRINTER_DPI);  // 559 px for 70mm
+      const targetW = Math.round((widthMm / 25.4) * PRINTER_DPI); // 559 px for 70mm
       const targetH = Math.round((heightMm / 25.4) * PRINTER_DPI); // 719 px for 90mm
-
-      // Create a dedicated super-high-DPI page for maximum quality rendering
-      const hiResPage = await browser.newPage();
-      await hiResPage.setViewport({ width: 800, height: 1200, deviceScaleFactor: 12 });
-      await hiResPage.setContent(labelHtml, { waitUntil: "domcontentloaded", timeout: 15000 });
-      await hiResPage.evaluate(async () => {
-        await document.fonts.ready;
-      });
-
-      // Apply the same adaptive scaling
-      const hiContentHeight = await hiResPage.evaluate((h: number) => {
-        const inner = document.querySelector('.inner') as HTMLElement;
-        return inner ? inner.scrollHeight : h;
-      }, heightMm * 10);
-
-      if (hiContentHeight > vHeight) {
-        const shrink = vHeight / hiContentHeight;
-        await hiResPage.evaluate((s: number, bs: number, vw: number) => {
-          const inner = document.querySelector('.inner') as HTMLElement;
-          const canvas = document.querySelector('.canvas') as HTMLElement;
-          if (inner) {
-            inner.style.width = (vw / s) + 'px';
-            inner.style.transform = `scale(${s})`;
-            inner.style.transformOrigin = 'top left';
-          }
-          if (canvas) {
-            canvas.style.transform = `scale(${bs})`;
-            canvas.style.transformOrigin = 'top left';
-          }
-        }, shrink, BASE_SCALE, vWidth);
-      } else {
-        await hiResPage.evaluate((scale: number) => {
-          const canvas = document.querySelector('.canvas') as HTMLElement;
-          if (canvas) {
-            canvas.style.transform = `scale(${scale})`;
-            canvas.style.transformOrigin = 'top left';
-          }
-        }, BASE_SCALE);
-      }
-
-      // Step 1: Take screenshot at ~1150 DPI (12× scale)
       const clipW = Math.round((widthMm / 25.4) * 96);
       const clipH = Math.round((heightMm / 25.4) * 96);
 
-      const screenshotBuffer = await hiResPage.screenshot({
-        type: 'png',
+      // Single hi-res screenshot of just the label region. Puppeteer encodes
+      // this as PNG over CDP; sharp takes the raw buffer and does the
+      // threshold + nearest-neighbor downsample in native C++ (~30× faster
+      // than the old JS pixel-loop round-trip via Canvas).
+      const screenshotBuffer = await page.screenshot({
+        type: "png",
         clip: { x: 0, y: 0, width: clipW, height: clipH },
+        omitBackground: false,
       });
 
-      // Step 2: Threshold to pure B&W + nearest-neighbor downsample to exact printer DPI
-      const base64Screenshot = Buffer.from(screenshotBuffer).toString('base64');
-      const monoBase64 = await hiResPage.evaluate(async (imgData: string, tW: number, tH: number) => {
-        const img = new Image();
-        img.src = 'data:image/png;base64,' + imgData;
-        await new Promise(resolve => { img.onload = resolve; });
+      const monoPngBuffer = await sharp(screenshotBuffer)
+        .grayscale()
+        .threshold(120) // identical cutoff to the previous JS loop
+        .resize(targetW, targetH, { kernel: "nearest", fit: "fill" })
+        .png({ compressionLevel: 9 })
+        .toBuffer();
 
-        // First: draw at original hi-res size and apply threshold
-        const bigCanvas = document.createElement('canvas');
-        bigCanvas.width = img.width;
-        bigCanvas.height = img.height;
-        const bigCtx = bigCanvas.getContext('2d')!;
-        bigCtx.drawImage(img, 0, 0);
-
-        const bigData = bigCtx.getImageData(0, 0, bigCanvas.width, bigCanvas.height);
-        const px = bigData.data;
-        for (let i = 0; i < px.length; i += 4) {
-          const gray = px[i] * 0.299 + px[i+1] * 0.587 + px[i+2] * 0.114;
-          const val = gray < 120 ? 0 : 255;
-          px[i] = val;
-          px[i+1] = val;
-          px[i+2] = val;
-          px[i+3] = 255;
-        }
-        bigCtx.putImageData(bigData, 0, 0);
-
-        // Second: downsample to exact printer resolution using nearest-neighbor
-        const outCanvas = document.createElement('canvas');
-        outCanvas.width = tW;
-        outCanvas.height = tH;
-        const outCtx = outCanvas.getContext('2d')!;
-        outCtx.imageSmoothingEnabled = false; // NEAREST NEIGHBOR — no interpolation!
-        outCtx.drawImage(bigCanvas, 0, 0, tW, tH);
-
-        return outCanvas.toDataURL('image/png').split(',')[1];
-      }, base64Screenshot, targetW, targetH);
-
-      await hiResPage.close();
-
-      const monoPngBuffer = Buffer.from(monoBase64, 'base64');
-
-      return new NextResponse(monoPngBuffer, {
+      return new NextResponse(new Uint8Array(monoPngBuffer), {
         headers: {
           "Content-Type": "image/png",
           "Content-Disposition": `inline; filename="label-${product.sku || product.id}.png"`,
@@ -247,14 +293,17 @@ export async function POST(req: NextRequest) {
         "Content-Disposition": `inline; filename="label-${product.sku || product.id}.pdf"`,
       },
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "PDF render failed";
-    console.error("PDF render error:", err);
-    return NextResponse.json({ error: message }, { status: 500 });
-  } finally {
-    if (page) await page.close().catch(() => {});
-    // We intentionally DO NOT close the browser here, keeping it warm for the next print job!
-  }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Render failed";
+      console.error("Render error:", err);
+      // If the warm page is broken, drop it so the next request re-creates.
+      if (warmPage && warmPage.isClosed && warmPage.isClosed()) {
+        warmPage = null;
+      }
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+    // Page stays open for the next render. Browser also stays warm.
+  });
 }
 
 /**
@@ -296,7 +345,8 @@ function buildLabelHtml(
   heightMm: number,
   mfgDate?: string,
   expDate?: string,
-  iconDataUris?: Record<string, string>
+  iconDataUris?: Record<string, string>,
+  embeddedFontCss?: string
 ): string {
   const isCompositionDuplicate = (name: string, comp: string | null | undefined) => {
     if (!comp) return true;
@@ -313,13 +363,19 @@ function buildLabelHtml(
   const forkGlassSrc = iconDataUris?.fork_glass || "/icons/fork_glass.png";
   const pap20Src = iconDataUris?.pap20 || "/icons/pap20.png";
 
+  // Prefer inlined (data:) font CSS when available; fall back to CDN link
+  // so rendering still works if the initial Google fetch failed.
+  const fontStyleBlock = embeddedFontCss && embeddedFontCss.length > 0
+    ? `<style>${embeddedFontCss}</style>`
+    : `<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700;900&subset=cyrillic,cyrillic-ext,latin&display=swap" rel="stylesheet">`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700;900&subset=cyrillic,cyrillic-ext,latin&display=swap" rel="stylesheet">
+${fontStyleBlock}
 <style>
   @page {
     size: ${widthMm}mm ${heightMm}mm;
