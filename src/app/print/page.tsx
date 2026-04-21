@@ -90,11 +90,12 @@ export default function PrintPage() {
     _setCurrentPath((prev) => {
       const nextPath = typeof newPath === "function" ? newPath(prev) : newPath;
       if (typeof window !== "undefined") {
-        const newHash = nextPath ? `#${encodeURIComponent(nextPath)}` : " ";
-        // Use pushState to avoid jumping if needed, but hash assignment is easier and adds to history
-        if (window.location.hash !== newHash) {
-           window.history.pushState(null, "", newHash === " " ? window.location.pathname + window.location.search : newHash);
-        }
+        const newHash = nextPath ? `#${encodeURIComponent(nextPath)}` : "";
+        queueMicrotask(() => {
+          if (window.location.hash === newHash) return;
+          const url = newHash ? newHash : window.location.pathname + window.location.search;
+          window.history.pushState(null, "", url);
+        });
       }
       return nextPath;
     });
@@ -220,98 +221,66 @@ export default function PrintPage() {
 
   const handlePrint = useCallback(async () => {
     if (!selected) return;
-    
+
     setRendering(true);
-    
+
     try {
-      // Request server-side monochrome image rendering
-      const response = await fetch('/api/render', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          productId: selected.id, 
-          mfgDate: mfgDateFormatted, 
+      // Ask the server to render a PDF at the exact label size. PDF is
+      // ~3× faster than the image path on the prod VM (500ms vs 2.6s)
+      // because it's vector output and skips the hi-res supersample +
+      // sharp threshold pipeline.
+      const response = await fetch("/api/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: selected.id,
+          mfgDate: mfgDateFormatted,
           expDate: expDateFormatted,
-          format: 'image'
-        })
+        }),
       });
 
-      if (!response.ok) throw new Error("Ошибка генерации изображения для печати");
-      
-      const blob = await response.blob();
-      const imgUrl = window.URL.createObjectURL(blob);
-      
-      let wMm = selected.template?.widthMm ?? 70;
-      let hMm = selected.template?.heightMm ?? 90;
-      if (wMm > hMm) { const t = wMm; wMm = hMm; hMm = t; }
+      if (!response.ok) throw new Error("Ошибка генерации PDF для печати");
 
-      // Create an iframe with just the monochrome image
-      const printIframe = document.createElement('iframe');
-      printIframe.style.position = 'absolute';
-      printIframe.style.width = '0px';
-      printIframe.style.height = '0px';
-      printIframe.style.border = 'none';
+      const blob = await response.blob();
+      const pdfUrl = window.URL.createObjectURL(blob);
+
+      // Hidden iframe pointed at the PDF blob. Chrome's built-in PDF
+      // viewer honours contentWindow.print() on the embedded PDF.
+      const printIframe = document.createElement("iframe");
+      printIframe.style.position = "fixed";
+      printIframe.style.right = "0";
+      printIframe.style.bottom = "0";
+      printIframe.style.width = "0";
+      printIframe.style.height = "0";
+      printIframe.style.border = "0";
+      printIframe.src = pdfUrl;
       document.body.appendChild(printIframe);
-      
-      const doc = printIframe.contentWindow?.document;
-      if (doc) {
-        doc.open();
-        doc.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Печать этикетки</title>
-              <style>
-                @page { size: ${wMm}mm ${hMm}mm; margin: 0; }
-                * { margin: 0; padding: 0; }
-                body { 
-                  margin: 0; 
-                  padding: 0; 
-                  background: white; 
-                  overflow: hidden;
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-                img {
-                  width: ${wMm}mm;
-                  height: ${hMm}mm;
-                  display: block;
-                  image-rendering: pixelated;
-                  image-rendering: -webkit-optimize-contrast;
-                }
-              </style>
-            </head>
-            <body>
-              <img src="${imgUrl}" />
-            </body>
-          </html>
-        `);
-        doc.close();
-        
-        // Wait for image to load, then print
-        const imgEl = doc.querySelector('img');
-        const doPrint = () => {
-          setTimeout(() => {
+
+      const cleanup = () => {
+        window.URL.revokeObjectURL(pdfUrl);
+        if (document.body.contains(printIframe)) {
+          document.body.removeChild(printIframe);
+        }
+      };
+
+      printIframe.onload = () => {
+        // Small delay so the PDF viewer plugin finishes initializing
+        // before we invoke print.
+        setTimeout(() => {
+          try {
             printIframe.contentWindow?.focus();
             printIframe.contentWindow?.print();
-            setRendering(false);
-            setTimeout(() => {
-              window.URL.revokeObjectURL(imgUrl);
-              if (document.body.contains(printIframe)) {
-                document.body.removeChild(printIframe);
-              }
-            }, 3000);
-          }, 300);
-        };
-
-        if (imgEl) {
-          imgEl.onload = doPrint;
-          // Fallback if already loaded  
-          if (imgEl.complete) doPrint();
-        } else {
-          doPrint();
-        }
-      }
+          } catch {
+            // If the browser blocks programmatic print of the PDF
+            // iframe, fall back to opening it in a new tab so the user
+            // can print with Ctrl/Cmd+P.
+            window.open(pdfUrl, "_blank");
+          }
+          setRendering(false);
+          // Keep the blob alive long enough for the print dialog.
+          setTimeout(cleanup, 5000);
+        }, 150);
+      };
     } catch (e: any) {
       setToast({ type: "error", message: e.message || "Ошибка печати." });
       setRendering(false);

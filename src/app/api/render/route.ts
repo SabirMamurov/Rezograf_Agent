@@ -82,10 +82,21 @@ function resolveChromiumPath(): string | undefined {
   return undefined;
 }
 
-async function getBrowser() {
-  if (globalBrowser && globalBrowser.connected) {
-    return globalBrowser;
+function isBrowserAlive(b: any): boolean {
+  if (!b) return false;
+  try {
+    const c = b.connected;
+    return typeof c === "function" ? c.call(b) : !!c;
+  } catch {
+    return false;
   }
+}
+
+async function getBrowser() {
+  if (isBrowserAlive(globalBrowser)) return globalBrowser;
+  // Old instance is dead — drop both caches together.
+  globalBrowser = null;
+  warmPage = null;
   const executablePath = resolveChromiumPath();
   globalBrowser = await puppeteer.launch({
     ...(executablePath ? { executablePath } : {}),
@@ -96,6 +107,10 @@ async function getBrowser() {
       "--disable-gpu",
       "--disable-dev-shm-usage"
     ],
+  });
+  globalBrowser.on("disconnected", () => {
+    globalBrowser = null;
+    warmPage = null;
   });
   return globalBrowser;
 }
@@ -108,8 +123,17 @@ async function getBrowser() {
 let warmPage: any = null;
 let renderQueue: Promise<unknown> = Promise.resolve();
 
+function isPageAlive(p: any): boolean {
+  if (!p) return false;
+  try {
+    return typeof p.isClosed === "function" ? !p.isClosed() : true;
+  } catch {
+    return false;
+  }
+}
+
 async function getWarmPage(browser: any) {
-  if (warmPage && !warmPage.isClosed()) return warmPage;
+  if (isPageAlive(warmPage)) return warmPage;
   warmPage = await browser.newPage();
   return warmPage;
 }
@@ -187,10 +211,11 @@ export async function POST(req: NextRequest) {
   const vpHeight = Math.max(heightMm * 10 * 2, 2000);
 
   // Image path needs a super-sampled raster; PDF path is vector so dsf=3 is fine.
-  const dsf = format === "image" ? 12 : 3;
+  // dsf=6 gives 36× supersample (plenty for threshold → 203 DPI output) and
+  // renders ~4× faster than dsf=12 on CPU-bound hosts like the prod VM.
+  const dsf = format === "image" ? 6 : 3;
 
-  return serialize(async () => {
-    try {
+  const doRender = async () => {
     const browser = await getBrowser();
     const page = await getWarmPage(browser);
     await page.setViewport({ width: vpWidth, height: vpHeight, deviceScaleFactor: dsf });
@@ -293,16 +318,38 @@ export async function POST(req: NextRequest) {
         "Content-Disposition": `inline; filename="label-${product.sku || product.id}.pdf"`,
       },
     });
+  };
+
+  // Errors like "Session closed", "Target closed" or a disconnected browser
+  // mean our cached page/browser is dead. Drop both caches and retry once
+  // with a fresh browser before surfacing the failure to the client.
+  const isStaleSessionError = (err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : String(err);
+    return /Session closed|Target closed|Target.*closed|TargetCloseError|ProtocolError|Connection closed|Browser.*disconnected/i.test(msg);
+  };
+
+  return serialize(async () => {
+    try {
+      return await doRender();
     } catch (err: unknown) {
+      if (isStaleSessionError(err)) {
+        console.warn("[render] stale puppeteer session, rebuilding:", err instanceof Error ? err.message : err);
+        try { warmPage && !warmPage.isClosed?.() && await warmPage.close(); } catch {}
+        warmPage = null;
+        try { globalBrowser && await globalBrowser.close(); } catch {}
+        globalBrowser = null;
+        try {
+          return await doRender();
+        } catch (err2: unknown) {
+          const message = err2 instanceof Error ? err2.message : "Render failed";
+          console.error("Render error after retry:", err2);
+          return NextResponse.json({ error: message }, { status: 500 });
+        }
+      }
       const message = err instanceof Error ? err.message : "Render failed";
       console.error("Render error:", err);
-      // If the warm page is broken, drop it so the next request re-creates.
-      if (warmPage && warmPage.isClosed && warmPage.isClosed()) {
-        warmPage = null;
-      }
       return NextResponse.json({ error: message }, { status: 500 });
     }
-    // Page stays open for the next render. Browser also stays warm.
   });
 }
 
