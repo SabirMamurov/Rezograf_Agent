@@ -115,8 +115,14 @@ export default function PrintPage() {
   const [folders, setFolders] = useState<string[]>([]);
   const [folderProducts, setFolderProducts] = useState<Product[]>([]);
   const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
   const [searchLoading, setSearchLoading] = useState(false);
-  
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchActiveIdx, setSearchActiveIdx] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const activeResultRef = useRef<HTMLButtonElement>(null);
+
   const [selected, setSelected] = useState<Product | null>(null);
   const [barcodeSvg, setBarcodeSvg] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -178,21 +184,54 @@ export default function PrintPage() {
     loadFolderData();
   }, [currentPath]);
 
-  // Handle Global Search
+  // Handle Global Search — debounced, race-safe
   useEffect(() => {
-    if (!query) {
+    const trimmed = query.trim();
+    if (!trimmed) {
       setSearchResults([]);
+      setSearchTotal(0);
+      setSearchLoading(false);
       return;
     }
+    let cancelled = false;
+    setSearchLoading(true);
     const timer = setTimeout(() => {
-      setSearchLoading(true);
-      fetch(`/api/products?q=${encodeURIComponent(query)}&limit=10`)
-        .then(r => r.json())
-        .then(data => setSearchResults(data.products || []))
-        .finally(() => setSearchLoading(false));
-    }, 400);
-    return () => clearTimeout(timer);
+      fetch(`/api/products?q=${encodeURIComponent(trimmed)}&limit=20`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (cancelled) return;
+          setSearchResults(data.products || []);
+          setSearchTotal(data.total || 0);
+          setSearchActiveIdx(0);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchLoading(false);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [query]);
+
+  // Close search dropdown on outside click / Escape
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [searchOpen]);
+
+  // Keep highlighted row in view
+  useEffect(() => {
+    if (searchOpen && activeResultRef.current) {
+      activeResultRef.current.scrollIntoView({ block: "nearest" });
+    }
+  }, [searchActiveIdx, searchOpen]);
 
   // Load barcode when product selected
   useEffect(() => {
@@ -216,7 +255,28 @@ export default function PrintPage() {
   const handleSelect = (prod: Product) => {
     setSelected(prod);
     setIsEditing(false);
-    setQuery(""); // Close search modal
+    setQuery("");
+    setSearchOpen(false);
+    setSearchResults([]);
+    setSearchActiveIdx(0);
+  };
+
+  // Highlight matched substring in search results (case-insensitive)
+  const highlight = (text: string | null, q: string): React.ReactNode => {
+    if (!text) return text;
+    const needle = q.trim();
+    if (!needle) return text;
+    const idx = text.toLowerCase().indexOf(needle.toLowerCase());
+    if (idx < 0) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="bg-indigo-500/30 text-[var(--theme-text)] rounded px-0.5">
+          {text.slice(idx, idx + needle.length)}
+        </mark>
+        {text.slice(idx + needle.length)}
+      </>
+    );
   };
 
   const handlePrint = useCallback(async () => {
@@ -585,43 +645,104 @@ export default function PrintPage() {
         </div>
 
         {/* Global Search Component */}
-        <div className="relative w-[400px]">
+        <div ref={searchBoxRef} className="relative w-[400px]">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-indigo-400/70" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-4.35-4.35" /><circle cx="11" cy="11" r="8" /></svg>
           </div>
           <input
+            ref={searchInputRef}
             type="text"
-            className="input-field pl-11 pr-4 py-2.5 sm:text-sm !bg-[var(--theme-input-bg)]"
-            placeholder="Глобальный поиск по всем папкам..."
+            className="input-field pl-11 pr-10 py-2.5 sm:text-sm w-full"
+            placeholder="Поиск по названию, артикулу, штрихкоду..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setSearchOpen(true); }}
+            onFocus={() => setSearchOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                if (query) { setQuery(""); }
+                else { setSearchOpen(false); searchInputRef.current?.blur(); }
+                return;
+              }
+              if (!searchOpen || searchResults.length === 0) return;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSearchActiveIdx((i) => Math.min(i + 1, searchResults.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSearchActiveIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                const pick = searchResults[searchActiveIdx];
+                if (pick) handleSelect(pick);
+              }
+            }}
           />
-          {searchLoading && <div className="absolute right-3 top-2.5 spinner w-4 h-4 border-2" />}
-          
-          {/* Search Dropdown Modal */}
-          {query.length > 0 && (
-            <div className="absolute top-14 left-0 w-[500px] bg-[var(--theme-glass)] border border-[var(--theme-border)] shadow-[0_20px_60px_rgba(0,0,0,0.2)] rounded-2xl overflow-hidden z-[100] max-h-[60vh] flex flex-col right-0 origin-top-right backdrop-blur-3xl">
-              <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest px-5 py-3 bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] shrink-0">
-                Результаты поиска
-              </div>
-              <div className="overflow-y-auto w-full flex-1 min-h-0 pb-2 custom-scrollbar">
-                {searchResults.length === 0 && !searchLoading ? (
-                  <div className="p-6 text-center text-[var(--theme-text-muted)]">Ничего не найдено</div>
-                ) : (
-                  searchResults.map(p => (
-                    <button key={p.id} onClick={() => handleSelect(p)} className="w-full text-left px-5 py-4 hover:bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] transition-colors flex flex-col gap-1.5 cursor-pointer group">
-                      <div className="text-[11px] text-indigo-500 font-mono flex gap-2">
-                        <span className="flex items-center gap-1.5"><FolderIcon className="w-3.5 h-3.5 -mt-0.5"/> {p.category || 'Без папки'}</span> <span className="text-[var(--theme-text-muted)]">/</span> <span>{p.btwFilePath?.split(/[/\\]/).pop()?.replace('.btw', '')}</span>
-                      </div>
-                      <div className="font-semibold text-[var(--theme-text)]">{p.name}</div>
-                      <div className="text-[11px] text-[var(--theme-text-muted)] flex gap-4 mt-1">
-                        {p.sku && <span>Арт: {p.sku}</span>}
-                        {p.barcodeEan13 && <span>ШК: {p.barcodeEan13}</span>}
-                      </div>
-                    </button>
-                  ))
+          {query && (
+            <button
+              type="button"
+              onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] transition-colors"
+              aria-label="Очистить"
+            >
+              {searchLoading ? (
+                <span className="spinner w-3.5 h-3.5 border-2 inline-block" />
+              ) : (
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              )}
+            </button>
+          )}
+
+          {/* Search Dropdown — solid fill, aligned to input */}
+          {searchOpen && query.trim().length > 0 && (
+            <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-[var(--color-surface-panel)] border border-[var(--theme-border)] shadow-2xl rounded-2xl overflow-hidden z-[100] max-h-[60vh] flex flex-col">
+              <div className="flex items-center justify-between px-5 py-3 bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] shrink-0">
+                <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Результаты поиска</span>
+                {!searchLoading && searchResults.length > 0 && (
+                  <span className="text-[10px] font-medium text-[var(--theme-text-muted)] tabular-nums">
+                    {searchResults.length}{searchTotal > searchResults.length ? ` из ${searchTotal}` : ""}
+                  </span>
                 )}
               </div>
+              <div className="overflow-y-auto w-full flex-1 min-h-0 custom-scrollbar">
+                {searchLoading && searchResults.length === 0 ? (
+                  <div className="p-6 text-center text-[var(--theme-text-muted)] text-sm">Поиск…</div>
+                ) : searchResults.length === 0 ? (
+                  <div className="p-6 text-center text-[var(--theme-text-muted)] text-sm">Ничего не найдено</div>
+                ) : (
+                  searchResults.map((p, i) => {
+                    const isActive = i === searchActiveIdx;
+                    const fileName = p.btwFilePath?.split(/[/\\]/).pop()?.replace(/\.btw$/i, "") || "";
+                    return (
+                      <button
+                        key={p.id}
+                        ref={isActive ? activeResultRef : null}
+                        onClick={() => handleSelect(p)}
+                        onMouseEnter={() => setSearchActiveIdx(i)}
+                        className={`w-full text-left px-5 py-3 border-b border-[var(--theme-border)] last:border-b-0 transition-colors flex flex-col gap-1 cursor-pointer ${isActive ? "bg-[var(--theme-overlay-hover)]" : "hover:bg-[var(--theme-overlay)]"}`}
+                      >
+                        <div className="font-semibold text-[var(--theme-text)] text-sm leading-snug">
+                          {highlight(p.name, query)}
+                        </div>
+                        <div className="text-[11px] text-[var(--theme-text-muted)] flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                          <span className="flex items-center gap-1 text-indigo-500/90">
+                            <FolderIcon className="w-3 h-3" /> {p.category || "Без папки"}
+                          </span>
+                          {fileName && <span className="opacity-70">{fileName}</span>}
+                          {p.sku && <span>Арт: {highlight(p.sku, query)}</span>}
+                          {p.barcodeEan13 && <span>ШК: {highlight(p.barcodeEan13, query)}</span>}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              {searchResults.length > 0 && (
+                <div className="px-5 py-2 text-[10px] text-[var(--theme-text-muted)] border-t border-[var(--theme-border)] flex gap-4 bg-[var(--theme-overlay)] shrink-0">
+                  <span><kbd className="px-1.5 py-0.5 rounded bg-[var(--theme-overlay-hover)] font-mono">↑↓</kbd> навигация</span>
+                  <span><kbd className="px-1.5 py-0.5 rounded bg-[var(--theme-overlay-hover)] font-mono">Enter</kbd> выбрать</span>
+                  <span><kbd className="px-1.5 py-0.5 rounded bg-[var(--theme-overlay-hover)] font-mono">Esc</kbd> закрыть</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -949,68 +1070,70 @@ export default function PrintPage() {
 
       {/* CREATE LABEL MODAL */}
       {isCreatingLabel && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in overflow-y-auto" onClick={() => setIsCreatingLabel(false)}>
-          <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsCreatingLabel(false)}>
+          <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center px-6 md:px-8 pt-6 md:pt-8 pb-4 shrink-0">
               <h2 className="text-xl font-bold text-[var(--theme-text)]">Создать этикетку</h2>
               <button onClick={() => setIsCreatingLabel(false)} className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text)]">✕</button>
             </div>
-            
-            <div className="mb-6 flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-              <span>Папка сохранения:</span>
-              <span className="font-bold opacity-100">{currentPath ? currentPath : "Главная директория (без папки)"}</span>
+
+            <div className="px-6 md:px-8 pb-4 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+              <div className="mb-6 flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                <span>Папка сохранения:</span>
+                <span className="font-bold opacity-100">{currentPath ? currentPath : "Главная директория (без папки)"}</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Название*</label>
+                  <input type="text" className="input-field w-full" placeholder="Название товара..." value={createForm.name || ""} onChange={e => setCreateForm({...createForm, name: e.target.value})} autoFocus />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Артикул</label>
+                  <input type="text" className="input-field w-full" placeholder="SKU001" value={createForm.sku || ""} onChange={e => setCreateForm({...createForm, sku: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Штрихкод (EAN-13)</label>
+                  <input type="text" className="input-field w-full" placeholder="1234567890123" value={createForm.barcodeEan13 || ""} onChange={e => setCreateForm({...createForm, barcodeEan13: e.target.value})} />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Масса</label>
+                  <input type="text" className="input-field w-full" placeholder="100 г" value={createForm.weight || ""} onChange={e => setCreateForm({...createForm, weight: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Сертификат (ГОСТ/СТО)</label>
+                  <input type="text" className="input-field w-full" placeholder="СТО..." value={createForm.certCode || ""} onChange={e => setCreateForm({...createForm, certCode: e.target.value})} />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Срок и условия хранения</label>
+                  <input type="text" className="input-field w-full" placeholder="6 месяцев при температуре 18C" value={createForm.storageCond || ""} onChange={e => setCreateForm({...createForm, storageCond: e.target.value})} />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">КБЖУ</label>
+                  <textarea className="input-field w-full min-h-[60px]" placeholder="Белки: 1 г, Жиры: 2 г, Углеводы: 3 г" value={createForm.nutritionalInfo || ""} onChange={e => setCreateForm({...createForm, nutritionalInfo: e.target.value})} />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Состав</label>
+                  <textarea className="input-field w-full min-h-[80px]" placeholder="Ингредиенты..." value={createForm.composition || ""} onChange={e => setCreateForm({...createForm, composition: e.target.value})} />
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Название*</label>
-                <input type="text" className="input-field w-full" placeholder="Название товара..." value={createForm.name || ""} onChange={e => setCreateForm({...createForm, name: e.target.value})} autoFocus />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Артикул</label>
-                <input type="text" className="input-field w-full" placeholder="SKU001" value={createForm.sku || ""} onChange={e => setCreateForm({...createForm, sku: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Штрихкод (EAN-13)</label>
-                <input type="text" className="input-field w-full" placeholder="1234567890123" value={createForm.barcodeEan13 || ""} onChange={e => setCreateForm({...createForm, barcodeEan13: e.target.value})} />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Масса</label>
-                <input type="text" className="input-field w-full" placeholder="100 г" value={createForm.weight || ""} onChange={e => setCreateForm({...createForm, weight: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Сертификат (ГОСТ/СТО)</label>
-                <input type="text" className="input-field w-full" placeholder="СТО..." value={createForm.certCode || ""} onChange={e => setCreateForm({...createForm, certCode: e.target.value})} />
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Срок и условия хранения</label>
-                <input type="text" className="input-field w-full" placeholder="6 месяцев при температуре 18C" value={createForm.storageCond || ""} onChange={e => setCreateForm({...createForm, storageCond: e.target.value})} />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">КБЖУ</label>
-                <textarea className="input-field w-full min-h-[60px]" placeholder="Белки: 1 г, Жиры: 2 г, Углеводы: 3 г" value={createForm.nutritionalInfo || ""} onChange={e => setCreateForm({...createForm, nutritionalInfo: e.target.value})} />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Состав</label>
-                <textarea className="input-field w-full min-h-[80px]" placeholder="Ингредиенты..." value={createForm.composition || ""} onChange={e => setCreateForm({...createForm, composition: e.target.value})} />
-              </div>
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-[var(--theme-border)] flex gap-4 justify-end">
-              <button 
-                onClick={() => setIsCreatingLabel(false)} 
+            <div className="px-6 md:px-8 py-4 border-t border-[var(--theme-border)] flex gap-4 justify-end shrink-0">
+              <button
+                onClick={() => setIsCreatingLabel(false)}
                 className="px-6 py-2.5 rounded-xl text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-overlay)] transition-colors"
               >
                 Отмена
               </button>
-              <button 
-                onClick={handleCreateLabel} 
-                disabled={creatingItem || !createForm.name} 
+              <button
+                onClick={handleCreateLabel}
+                disabled={creatingItem || !createForm.name}
                 className="btn-glow px-8 py-2.5 text-sm disabled:opacity-50"
               >
                 {creatingItem ? "Создание..." : "Создать этикетку"}
