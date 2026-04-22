@@ -60,6 +60,8 @@ Three levels of caching keep per-request work minimal:
 - **`warmPage`** — a single page object kept alive across requests. `page.setContent()` resets DOM without paying the ~600 ms CDP `newPage` tax on macOS.
 - **`renderQueue` mutex** — serializes access to `warmPage` via a promise chain so two concurrent requests don't clobber each other's viewport/content.
 
+Stale-session recovery: the cached `globalBrowser`/`warmPage` can die between requests (laptop sleep, Chromium crash). The route detects stale-session errors (`Session closed`, `Target closed`, `ProtocolError`, etc. — see `isStaleSessionError`), tears down both caches, and retries the render once. A `browser.on("disconnected")` listener also nulls the cache proactively. Don't add new render paths that bypass `serialize(...)` or skip the retry — the warm caches **will** go stale and a one-shot failure will reach the user as "Ошибка генерации PDF".
+
 `resolveChromiumPath()` picks the executable at runtime: `PUPPETEER_EXECUTABLE_PATH` env var first, else `/snap/bin/chromium` if it exists on Linux, else Puppeteer's bundled Chromium (macOS/Windows/dev). Do **not** hardcode `executablePath` again.
 
 Warm-request budget (macOS, Apple Silicon): PDF ~200 ms, Image ~500 ms. The first request after module init is slower (~2-3 s) because it downloads font files.
@@ -69,6 +71,10 @@ Warm-request budget (macOS, Apple Silicon): PDF ~200 ms, Image ~500 ms. The firs
 ### Prisma client
 
 `src/lib/prisma.ts` instantiates a singleton with the **`PrismaBetterSqlite3` driver adapter** (`previewFeatures = ["driverAdapters"]` in schema). The DB path is resolved as `path.join(process.cwd(), "prisma", "dev.db")` — keep this in mind when the script's cwd is not the project root.
+
+### Catalog search (`GET /api/products?q=…`)
+
+SQLite's `LOWER()` and `LIKE` are **ASCII-only** — `LOWER('Кедровая')` returns `'Кедровая'` unchanged, so any SQL substring filter silently fails on mixed-case Cyrillic. The route therefore fetches the full filtered set with Prisma and does the substring filter, ranking, and pagination **in JavaScript** using `String.prototype.toLowerCase()` (which is Unicode-aware). The query is whitespace-tokenized and tokens are AND-matched, so word order is irrelevant. With ~3k products this is a few ms; if the catalog grows past tens of thousands, register a custom Unicode collation via the better-sqlite3 driver adapter rather than reverting to in-SQL `LIKE`.
 
 ### UI shell
 
@@ -87,3 +93,6 @@ Contains ~35 one-off `.js`/`.ts` utilities (`fix_*`, `analyze_*`, `check_*`, `ex
 - **Prisma 7 + Node**: `@prisma/streams-local` wants Node ≥ 22. Node 20 works in practice (EBADENGINE warning only).
 - **`.gitignore` excludes** `*.db`, `*.csv`, `*.txt`, `*.zip`, `classified_products.json`. Data is out-of-band; never commit it back.
 - **`allowedDevOrigins`** in `next.config.ts` pins a specific LAN IP — update when testing from a different device or it will reject the origin.
+- **Version bump touches three files**: `package.json`, the badge string in `src/components/Sidebar.tsx`, and a new entry at the top of the `LOGS` array in `src/app/changelog/page.tsx`. Forgetting the sidebar leaves a stale version visible to operators.
+- **Two deploy branches**: `claude/sweet-euler-550e72` is what the production VM pulls (see `pm2 cwd`); `main` is what GitHub shows on the repo landing page. Always push to both, otherwise the VM is current but the repo looks dead.
+- **React 19 setState-in-render**: history navigation in `src/app/print/page.tsx` defers `history.pushState` via `queueMicrotask` because it sits inside a `setCurrentPath` updater. Doing it synchronously triggers React's "Cannot update a component (Router) while rendering a different component" warning. Apply the same pattern for any router/state side-effect you put in a setState callback.
