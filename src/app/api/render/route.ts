@@ -10,6 +10,17 @@ import * as path from "path";
 // Global cache to avoid launching a new browser per request
 let globalBrowser: any = null;
 
+// HTTP header values are ByteString (latin-1) — non-ASCII filenames blow up
+// with "Cannot convert argument to a ByteString". Cyrillic SKUs like
+// "МСС 50236" (where М/С are Cyrillic, not Latin) hit this immediately.
+// RFC 6266: send an ASCII-safe `filename=` and a UTF-8 `filename*=` for
+// browsers that support it.
+function contentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "");
+  const utf8 = encodeURIComponent(filename);
+  return `inline; filename="${ascii}"; filename*=UTF-8''${utf8}`;
+}
+
 // ── FONT EMBEDDING ─────────────────────────────────────────────────────
 // Fetch Roboto Condensed once and keep it as an inline @font-face CSS
 // string. Every subsequent label render reuses the cached copy instead of
@@ -299,7 +310,7 @@ export async function POST(req: NextRequest) {
       return new NextResponse(new Uint8Array(monoPngBuffer), {
         headers: {
           "Content-Type": "image/png",
-          "Content-Disposition": `inline; filename="label-${product.sku || product.id}.png"`,
+          "Content-Disposition": contentDisposition(`label-${product.sku || product.id}.png`),
         },
       });
     }
@@ -316,7 +327,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="label-${product.sku || product.id}.pdf"`,
+        "Content-Disposition": contentDisposition(`label-${product.sku || product.id}.pdf`),
       },
     });
   };
