@@ -151,6 +151,13 @@ export default function PrintPage() {
   const [moveSearchQuery, setMoveSearchQuery] = useState("");
   const [movingItemUrl, setMovingItemUrl] = useState(false);
 
+  // Duplicate state — same folder picker pattern as Move, but creates a copy
+  // instead of mutating btwFilePath in place. Operators use this to seed the
+  // same product into a different folder so they only have to change the SKU.
+  const [isDuplicatingFile, setIsDuplicatingFile] = useState(false);
+  const [duplicateSearchQuery, setDuplicateSearchQuery] = useState("");
+  const [duplicatingItem, setDuplicatingItem] = useState(false);
+
   const basePrefix = 'C:\\Users\\Пользователь\\Desktop\\extracted_labels\\';
 
   useEffect(() => {
@@ -539,6 +546,49 @@ export default function PrintPage() {
     }
   };
 
+  const openDuplicateFolder = async () => {
+    setIsDuplicatingFile(true);
+    setDuplicateSearchQuery("");
+    setAllFoldersList([]);
+    try {
+      const res = await fetch("/api/folders?fetchAllPaths=true");
+      if (res.ok) {
+        const data = await res.json();
+        setAllFoldersList(data.folders || []);
+      }
+    } catch (err) {
+      setToast({ message: "Ошибка загрузки папок", type: "error" });
+    }
+  };
+
+  const handleDuplicateFile = async (targetPath: string) => {
+    if (!selected) return;
+    setDuplicatingItem(true);
+    try {
+      const res = await fetch("/api/products/duplicate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selected.id, targetFolder: targetPath }),
+      });
+      if (!res.ok) throw new Error("Failed to duplicate");
+      const created = await res.json();
+
+      setToast({ message: "Дубликат создан", type: "success" });
+      setIsDuplicatingFile(false);
+
+      // Jump to the destination folder so the operator immediately sees the
+      // new copy in the file list, then select it for editing.
+      setCurrentPath(targetPath);
+      handleSelect(created);
+      setIsEditing(true);
+      setEditForm(created);
+    } catch (err) {
+      setToast({ message: "Ошибка дублирования", type: "error" });
+    } finally {
+      setDuplicatingItem(false);
+    }
+  };
+
   const handleDropMove = async (product: Product, targetPath: string) => {
     if (!product) return;
     setMovingItemUrl(true);
@@ -893,6 +943,9 @@ export default function PrintPage() {
                       <button onClick={openMoveFolder} className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center gap-1.5">
                         📦 Переместить
                       </button>
+                      <button onClick={openDuplicateFolder} className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-cyan-500/20 cursor-pointer flex items-center gap-1.5">
+                        📋 Дублировать
+                      </button>
                       <button onClick={handleDeleteFile} disabled={deletingItem} className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
                         🗑️ Удалить
                       </button>
@@ -1194,6 +1247,56 @@ export default function PrintPage() {
             
             <div className="flex justify-end pt-2">
               <button onClick={() => setIsMovingFile(false)} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDuplicatingFile && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsDuplicatingFile(false)}>
+          <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 w-[500px] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-[var(--theme-text)] mb-1">Дублировать в папку</h2>
+            <div className="text-xs text-[var(--theme-text-muted)] mb-3">
+              Создаст копию товара со всеми полями. После создания вы сразу попадёте в режим редактирования, чтобы поменять артикул.
+            </div>
+            <div className="text-sm font-semibold text-cyan-500 mb-4 truncate">{selected?.name}</div>
+
+            <input
+              type="text"
+              className="input-field w-full mb-4"
+              placeholder="Поиск папки..."
+              value={duplicateSearchQuery}
+              onChange={e => setDuplicateSearchQuery(e.target.value)}
+              autoFocus
+            />
+
+            <div className="flex-1 overflow-y-auto min-h-[50px] bg-[var(--theme-overlay)] border border-[var(--theme-border)] rounded-xl py-2 px-1 mb-4 custom-scrollbar">
+              <button
+                className="w-full text-left px-4 py-3 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer border-b border-transparent hover:border-[var(--theme-border)] font-bold mb-1"
+                onClick={() => handleDuplicateFile("")}
+                disabled={duplicatingItem}
+              >
+                🏠 Корневая директория (без папки)
+              </button>
+
+              {allFoldersList.filter(f => f.toLowerCase().includes(duplicateSearchQuery.toLowerCase())).map(f => (
+                <button
+                  key={f}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer text-[var(--theme-text)]"
+                  onClick={() => handleDuplicateFile(f)}
+                  disabled={duplicatingItem}
+                >
+                  📁 {f}
+                </button>
+              ))}
+
+              {allFoldersList.filter(f => f.toLowerCase().includes(duplicateSearchQuery.toLowerCase())).length === 0 && (
+                <div className="text-center py-4 text-[var(--theme-text-muted)] text-sm">Папки не найдены</div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button onClick={() => setIsDuplicatingFile(false)} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
             </div>
           </div>
         </div>
