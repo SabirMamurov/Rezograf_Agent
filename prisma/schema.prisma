@@ -24,6 +24,7 @@ model Template {
 model Product {
   id              String    @id @default(uuid())
   sku             String?
+  sku2            String?
   name            String
   category        String?
   subcategory     String?

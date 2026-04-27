@@ -7,6 +7,7 @@ interface Product {
   id: string;
   name: string;
   sku: string | null;
+  sku2: string | null;
   category: string | null;
   subcategory: string | null;
   composition: string | null;
@@ -36,6 +37,7 @@ const FIELDS: { key: keyof Product; label: string; type: "text" | "textarea"; pl
   { key: "manufacturer", label: "Производитель", type: "text", placeholder: "ООО «Название»" },
   { key: "barcodeEan13", label: "Штрихкод EAN-13", type: "text", placeholder: "4640201206410" },
   { key: "sku", label: "Артикул (SKU)", type: "text", placeholder: "12345" },
+  { key: "sku2", label: "Артикул 2 (для сетей)", type: "text", placeholder: "67890" },
 ];
 
 /* ───────── Helpers ───────── */

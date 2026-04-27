@@ -39,6 +39,7 @@ const BackFolderIcon = ({ className = "w-5 h-5 inline-block text-indigo-400" }) 
 interface Product {
   id: string;
   sku: string | null;
+  sku2: string | null;
   name: string;
   composition: string | null;
   weight: string | null;
@@ -388,6 +389,7 @@ export default function PrintPage() {
     setEditForm({
       name: selected.name,
       sku: selected.sku || "",
+      sku2: selected.sku2 || "",
       weight: selected.weight || "",
       barcodeEan13: selected.barcodeEan13 || "",
       nutritionalInfo: selected.nutritionalInfo || "",
@@ -921,8 +923,9 @@ export default function PrintPage() {
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Название</label><input type="text" className="input-field" value={editForm.name || ""} onChange={e => setEditForm({...editForm, name: e.target.value})} /></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Артикул</label><input type="text" className="input-field" value={editForm.sku || ""} onChange={e => setEditForm({...editForm, sku: e.target.value})} /></div>
-                        <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Штрихкод</label><input type="text" className="input-field" value={editForm.barcodeEan13 || ""} onChange={e => setEditForm({...editForm, barcodeEan13: e.target.value})} /></div>
+                        <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Артикул 2 <span className="text-[10px] font-normal opacity-60">(для сетей)</span></label><input type="text" className="input-field" value={editForm.sku2 || ""} onChange={e => setEditForm({...editForm, sku2: e.target.value})} /></div>
                       </div>
+                      <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Штрихкод</label><input type="text" className="input-field" value={editForm.barcodeEan13 || ""} onChange={e => setEditForm({...editForm, barcodeEan13: e.target.value})} /></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Масса (в тексте)</label><input type="text" className="input-field" value={editForm.weight || ""} onChange={e => setEditForm({...editForm, weight: e.target.value})} /></div>
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Хранение</label><input type="text" className="input-field" value={editForm.storageCond || ""} onChange={e => setEditForm({...editForm, storageCond: e.target.value})} /></div>
@@ -934,7 +937,7 @@ export default function PrintPage() {
                   ) : (
                     <>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Оригинал</span><span className="font-mono text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 text-[11px] truncate max-w-[250px]" title={selected.btwFilePath || ""}>{selected.btwFilePath || "—"}</span></div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Артикул</span><span className="font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded tracking-widest text-[11px]">{selected.sku || "—"}</span></div>
+                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Артикул{selected.sku2 ? " / Артикул 2" : ""}</span><span className="font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded tracking-widest text-[11px]">{[selected.sku, selected.sku2].filter(Boolean).join(" / ") || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Штрихкод</span><span className="font-mono text-[var(--theme-text)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] px-2 py-0.5 rounded tracking-wider text-[11px]">{selected.barcodeEan13 || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Масса</span><span className="font-semibold text-[var(--theme-text)]">{selected.weight || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Стандарт</span><span className="font-semibold text-[var(--theme-text)] leading-none mt-0.5">{selected.certCode || "—"}</span></div>
@@ -1095,6 +1098,10 @@ export default function PrintPage() {
                   <input type="text" className="input-field w-full" placeholder="SKU001" value={createForm.sku || ""} onChange={e => setCreateForm({...createForm, sku: e.target.value})} />
                 </div>
                 <div>
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Артикул 2 <span className="text-[10px] font-normal opacity-60">(для сетей)</span></label>
+                  <input type="text" className="input-field w-full" placeholder="напр. 12345" value={createForm.sku2 || ""} onChange={e => setCreateForm({...createForm, sku2: e.target.value})} />
+                </div>
+                <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Штрихкод (EAN-13)</label>
                   <input type="text" className="input-field w-full" placeholder="1234567890123" value={createForm.barcodeEan13 || ""} onChange={e => setCreateForm({...createForm, barcodeEan13: e.target.value})} />
                 </div>

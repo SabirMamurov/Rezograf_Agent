@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import { computeSkuLayout } from "@/lib/sku-layout";
 
 interface Product {
   name: string;
   sku?: string | null;
+  sku2?: string | null;
   composition?: string | null;
   weight?: string | null;
   nutritionalInfo?: string | null;
@@ -167,21 +169,38 @@ export default function LabelPreview({
                 <img src="/icons/pap20.png" alt="PAP 20" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
               </div>
 
-              {/* SKU (directly under icons, centered, large) */}
-              {product.sku && (
-                <div style={{
-                  fontSize: "88px",
-                  fontFamily: "'Roboto Condensed', sans-serif",
-                  fontWeight: 700,
-                  lineHeight: "0.8",
-                  marginTop: "8px",
-                  marginBottom: "12px",
-                  textAlign: "center",
-                  letterSpacing: "-1px"
-                }}>
-                  {product.sku}
-                </div>
-              )}
+              {/* SKU(s) — adaptive size, stacks vertically when sku2 is present.
+                  Logic mirrored in /api/render/route.ts via computeSkuLayout. */}
+              {(() => {
+                const { fontSize, lines } = computeSkuLayout(product.sku, product.sku2);
+                if (fontSize === 0) return null;
+                return (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: lines.length > 1 ? "2px" : 0,
+                    marginTop: "8px",
+                    marginBottom: "12px",
+                    width: "100%",
+                  }}>
+                    {lines.map((line, i) => (
+                      <div key={i} style={{
+                        fontSize: `${fontSize}px`,
+                        fontFamily: "'Roboto Condensed', sans-serif",
+                        fontWeight: 700,
+                        lineHeight: "0.85",
+                        textAlign: "center",
+                        letterSpacing: "-1px",
+                        whiteSpace: "nowrap",
+                      }}>
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

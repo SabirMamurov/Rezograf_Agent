@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const fullQ = norm(q);
 
     const matches = all.filter((p) => {
-      const hay = [p.name, p.sku, p.barcodeEan13, p.category, p.btwFilePath]
+      const hay = [p.name, p.sku, p.sku2, p.barcodeEan13, p.category, p.btwFilePath]
         .map(norm)
         .join(" \u0001 ");
       return tokens.every((t) => hay.includes(t));
@@ -44,15 +44,15 @@ export async function GET(req: NextRequest) {
     matches.sort((a, b) => {
       const an = norm(a.name);
       const bn = norm(b.name);
-      const score = (n: string, sku: string, bar: string) => {
+      const score = (n: string, sku: string, sku2: string, bar: string) => {
         if (n === fullQ) return 0;
         if (n.startsWith(fullQ)) return 1;
-        if (sku === fullQ || bar === fullQ) return 2;
+        if (sku === fullQ || sku2 === fullQ || bar === fullQ) return 2;
         if (n.includes(fullQ)) return 3;
         return 4;
       };
-      const sa = score(an, norm(a.sku), norm(a.barcodeEan13));
-      const sb = score(bn, norm(b.sku), norm(b.barcodeEan13));
+      const sa = score(an, norm(a.sku), norm(a.sku2), norm(a.barcodeEan13));
+      const sb = score(bn, norm(b.sku), norm(b.sku2), norm(b.barcodeEan13));
       if (sa !== sb) return sa - sb;
       return an.localeCompare(bn, "ru");
     });
@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
     data: {
       name: body.name,
       sku: body.sku || null,
+      sku2: body.sku2 || null,
       category: body.category || null,
       subcategory: body.subcategory || null,
       composition: body.composition || null,
@@ -137,6 +138,7 @@ export async function PATCH(req: NextRequest) {
   const allowedFields = [
     "name",
     "sku",
+    "sku2",
     "category",
     "subcategory",
     "composition",

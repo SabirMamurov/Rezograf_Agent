@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateBarcodeSvg } from "@/lib/barcodes";
+import { computeSkuLayout } from "@/lib/sku-layout";
 import puppeteer from "puppeteer";
 import sharp from "sharp";
 import * as fs from "fs";
@@ -494,12 +495,20 @@ ${fontStyleBlock}
             <img src="${pap20Src}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
           </div>
           
-          <!-- SKU -->
-          ${product.sku ? `
-          <div style="font-size: 88px; font-weight: 700; font-family: 'Roboto Condensed', sans-serif; line-height: 0.8; margin-top: 8px; margin-bottom: 12px; text-align: center; letter-spacing: -1px;">
-            ${escapeHtml(product.sku)}
-          </div>
-          ` : ''}
+          <!-- SKU(s) — adaptive size, stacks vertically when sku2 is present.
+               Logic mirrored in components/LabelPreview.tsx via computeSkuLayout. -->
+          ${(() => {
+            const { fontSize, lines } = computeSkuLayout(product.sku, product.sku2);
+            if (fontSize === 0) return '';
+            const items = lines.map(l => `
+              <div style="font-size: ${fontSize}px; font-weight: 700; font-family: 'Roboto Condensed', sans-serif; line-height: 0.85; text-align: center; letter-spacing: -1px; white-space: nowrap;">
+                ${escapeHtml(l)}
+              </div>`).join('');
+            return `
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: ${lines.length > 1 ? '2px' : '0'}; margin-top: 8px; margin-bottom: 12px; width: 100%;">
+                ${items}
+              </div>`;
+          })()}
         </div>
       </div>
 

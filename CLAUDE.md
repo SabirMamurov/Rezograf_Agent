@@ -68,6 +68,8 @@ Warm-request budget (macOS, Apple Silicon): PDF ~200 ms, Image ~500 ms. The firs
 
 **`src/components/LabelPreview.tsx` and the HTML string inside `route.ts` must stay visually identical.** Pixel values, font sizes, margin values, and the duplicate-composition heuristic (`isCompositionDuplicate`) are duplicated across them because the preview is React and the print target is a standalone HTML document rendered by Puppeteer. Change one → change the other.
 
+`isCompositionDuplicate` hides `composition` when `name.includes(comp) || comp.includes(name)` (case-insensitive, slashes stripped). This is intentional — many imported products have `composition` that literally restates the `name`, and printing both wastes 70×90 mm of label area. Real-world impact: ~48% of products with non-empty composition currently fall into this bucket and don't get the composition block on the printed label. When operators report "состав не печатается", check this filter before assuming a data problem.
+
 ### Prisma client
 
 `src/lib/prisma.ts` instantiates a singleton with the **`PrismaBetterSqlite3` driver adapter** (`previewFeatures = ["driverAdapters"]` in schema). The DB path is resolved as `path.join(process.cwd(), "prisma", "dev.db")` — keep this in mind when the script's cwd is not the project root.
@@ -81,6 +83,14 @@ SQLite's `LOWER()` and `LIKE` are **ASCII-only** — `LOWER('Кедровая')`
 - `src/app/layout.tsx` runs a blocking inline `<script>` before hydration that reads `localStorage.rezograf-theme` and sets/removes `.light` on `<html>`. Default is light theme. Prevents theme flash; do not move theme setup into a React effect.
 - `/` redirects to `/print`. Two user-facing routes: `/print` (folder tree + label generation) and `/catalog` (flat editable table). `/changelog` is a static in-code list.
 - Tailwind 4 via `@tailwindcss/postcss`. Theme colors come from CSS custom properties (`--theme-*`, `--color-*`) defined in `globals.css`.
+- **The `/print` inspector has two states — read-only ("Данные") and edit ("Режим редактирования") — and they list different fields.** When you add an editable field to the edit form, mirror it in the read-only view, otherwise operators conclude the data was wiped. v1.0.3 fixed exactly this: `composition` was editable but never displayed in the inspector, so users opened products and saw no Состав row → reported "составы пропали" even though the DB was untouched.
+
+### Production deploy
+
+The system runs in production on a LAN VM (auth/IP details live in your user MEMORY under `reference_prod_vm.md`). Two relevant facts for code work:
+
+- The VM has a **kernel-level NAT redirect from `:80` to `:3000`** (no nginx/reverse proxy). Operators browse `http://<vm-ip>/` directly. `ss -tlnp` will *not* show anything on 80 — the rule is in `iptables -t nat PREROUTING`. Don't try to "fix" the missing 80 listener.
+- The repo has **two `dev.db` copies** on the VM: the authoritative one in `~/rezograf/prisma/dev.db` and a working copy in `~/Rezograf_Agent/prisma/dev.db` that the running app reads. The working copy occasionally goes to 0 bytes (Prisma auto-creates an empty file when something resolves cwd wrong). If `/api/products` starts returning HTTP 500, restore from the authoritative copy. Don't run `prisma migrate` against the working DB without a backup — there are no migrations to apply, and the import scripts will overwrite the catalog.
 
 ### `scripts/`
 
@@ -96,3 +106,5 @@ Contains ~35 one-off `.js`/`.ts` utilities (`fix_*`, `analyze_*`, `check_*`, `ex
 - **Version bump touches three files**: `package.json`, the badge string in `src/components/Sidebar.tsx`, and a new entry at the top of the `LOGS` array in `src/app/changelog/page.tsx`. Forgetting the sidebar leaves a stale version visible to operators.
 - **Two deploy branches**: `claude/sweet-euler-550e72` is what the production VM pulls (see `pm2 cwd`); `main` is what GitHub shows on the repo landing page. Always push to both, otherwise the VM is current but the repo looks dead.
 - **React 19 setState-in-render**: history navigation in `src/app/print/page.tsx` defers `history.pushState` via `queueMicrotask` because it sits inside a `setCurrentPath` updater. Doing it synchronously triggers React's "Cannot update a component (Router) while rendering a different component" warning. Apply the same pattern for any router/state side-effect you put in a setState callback.
+- **Browser disk cache outlives `pm2 delete + start`**: the deploy recipe (`delete + start`, not `restart`) breaks the *server's* SSG ETag cache, but Next.js 16 still ships `Cache-Control: s-maxage=31536000` for prerendered pages, so operator browsers will happily reuse last week's HTML and 404 on chunks whose build-id no longer exists. Symptom: blank page after deploy, while `curl http://<vm-ip>/print` returns 200 with full HTML and every `/_next/static/chunks/*` returns 200. Tell the operator to hard-reload (`Cmd+Shift+R`) or open `/print` directly. Long-term fix would be sending `no-cache` for HTML responses in `next.config.ts`.
+- **`sqlite3` CLI is not installed on the prod VM** — only the Node `better-sqlite3` module is available. To inspect the DB on the VM, drop a `.js` file inside `~/Rezograf_Agent/` (so `require('better-sqlite3')` resolves) and run `node script.js`; running it from `/tmp` will fail with `MODULE_NOT_FOUND`.
