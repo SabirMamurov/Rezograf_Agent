@@ -1155,43 +1155,41 @@ export default function PrintPage() {
                 <div className="h-px bg-gradient-to-r from-transparent via-[var(--theme-border)] to-transparent"></div>
 
                 {/* Action buttons */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-                  {!isEditing ? (
-                    <>
-                      {selected.category && selected.category !== currentPath && (
-                        <button
-                          onClick={() => {
-                            setCurrentPath(selected.category!);
-                          }}
-                          className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
-                          title={`Перейти к списку файлов в папке: ${selected.category}`}
-                        >
-                          📂 К товару
-                        </button>
-                      )}
-                      <button onClick={openMoveFolder} className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center gap-1.5">
-                        📦 Переместить
+                {!isEditing ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {selected.category && selected.category !== currentPath && (
+                      <button
+                        onClick={() => {
+                          setCurrentPath(selected.category!);
+                        }}
+                        className="col-span-2 py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        title={`Перейти к списку файлов в папке: ${selected.category}`}
+                      >
+                        📂 К товару
                       </button>
-                      <button onClick={openDuplicateFolder} className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-cyan-500/20 cursor-pointer flex items-center gap-1.5">
-                        📋 Дублировать
-                      </button>
-                      <button onClick={handleDeleteFile} disabled={deletingItem} className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50">
-                        🗑️ Удалить
-                      </button>
-                      <button onClick={startEdit} className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center gap-1.5">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        Редактировать
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-overlay)] rounded-lg transition-colors cursor-pointer border border-transparent">Отмена</button>
-                      <button onClick={saveEdit} disabled={savingEdit} className="py-1.5 px-4 text-[11px] font-bold uppercase tracking-wide bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-400 hover:to-purple-400 rounded-lg shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all cursor-pointer border border-transparent disabled:opacity-50 flex items-center gap-1">
-                        {savingEdit ? "Сохранение..." : "💾 Сохранить"}
-                      </button>
-                    </>
-                  )}
-                </div>
+                    )}
+                    <button onClick={openMoveFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                      📦 Переместить
+                    </button>
+                    <button onClick={openDuplicateFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-cyan-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                      📋 Дублировать
+                    </button>
+                    <button onClick={handleDeleteFile} disabled={deletingItem} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50">
+                      🗑️ Удалить
+                    </button>
+                    <button onClick={startEdit} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      Редактировать
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => setIsEditing(false)} className="py-2 px-3 text-[11px] font-bold uppercase tracking-wide text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] bg-[var(--theme-overlay)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg transition-colors cursor-pointer flex items-center justify-center">Отмена</button>
+                    <button onClick={saveEdit} disabled={savingEdit} className="py-2 px-3 text-[11px] font-bold uppercase tracking-wide bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-400 hover:to-purple-400 rounded-lg shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all cursor-pointer border border-transparent disabled:opacity-50 flex items-center justify-center gap-1">
+                      {savingEdit ? "Сохранение..." : "💾 Сохранить"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Edit / Details Form */}
