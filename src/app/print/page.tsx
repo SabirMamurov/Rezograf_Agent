@@ -293,10 +293,22 @@ export default function PrintPage() {
     setRendering(true);
 
     try {
-      // Ask the server to render a PDF at the exact label size. PDF is
-      // ~3× faster than the image path on the prod VM (500ms vs 2.6s)
-      // because it's vector output and skips the hi-res supersample +
-      // sharp threshold pipeline.
+      // ⚠ PRINT MUST USE THE IMAGE PATH, NOT PDF.
+      //
+      // The image path returns a 1-bit-equivalent PNG sized to exactly
+      // 559×720 (= 70×90 mm at 203 DPI), pre-thresholded by sharp so the
+      // bitmap maps pixel-for-pixel onto the Zebra/Xprinter thermal head.
+      // The browser's print dialog passes the PNG straight to the printer
+      // driver, which sends it to the head with no resampling or
+      // antialiasing.
+      //
+      // The PDF path was tried once (commit 64c8985) "because it's 3×
+      // faster": the printer driver then rasterized the PDF on its own,
+      // introduced antialiasing, and produced visibly wavy text and grey
+      // dithered blocks on the thermal output ("волнистый и не читаемый
+      // текст" — operators reported this twice). PDF is fine for download
+      // / preview, NOT for the physical printer. Do not "optimise" this
+      // back to the PDF path.
       const response = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -304,16 +316,28 @@ export default function PrintPage() {
           productId: selected.id,
           mfgDate: mfgDateFormatted,
           expDate: expDateFormatted,
+          format: "image",
         }),
       });
 
-      if (!response.ok) throw new Error("Ошибка генерации PDF для печати");
+      if (!response.ok) throw new Error("Ошибка генерации изображения для печати");
 
       const blob = await response.blob();
-      const pdfUrl = window.URL.createObjectURL(blob);
+      const imgUrl = window.URL.createObjectURL(blob);
 
-      // Hidden iframe pointed at the PDF blob. Chrome's built-in PDF
-      // viewer honours contentWindow.print() on the embedded PDF.
+      // Physical label size in mm (template-defined; default 70×90).
+      // Forced portrait — the print pipeline always renders portrait, so
+      // we mirror that here for @page.
+      let wMm = selected.template?.widthMm ?? 70;
+      let hMm = selected.template?.heightMm ?? 90;
+      if (wMm > hMm) { const t = wMm; wMm = hMm; hMm = t; }
+
+      // Hidden iframe whose body is just the bitmap, sized in mm so the
+      // print dialog has nothing to scale. image-rendering: pixelated
+      // tells the browser NOT to interpolate the bitmap when displaying
+      // it (CSS px ≠ device px on Hi-DPI screens) — without this the
+      // print preview looks blurry, even though the bytes that go to
+      // the printer are crisp.
       const printIframe = document.createElement("iframe");
       printIframe.style.position = "fixed";
       printIframe.style.right = "0";
@@ -321,34 +345,79 @@ export default function PrintPage() {
       printIframe.style.width = "0";
       printIframe.style.height = "0";
       printIframe.style.border = "0";
-      printIframe.src = pdfUrl;
       document.body.appendChild(printIframe);
 
       const cleanup = () => {
-        window.URL.revokeObjectURL(pdfUrl);
+        window.URL.revokeObjectURL(imgUrl);
         if (document.body.contains(printIframe)) {
           document.body.removeChild(printIframe);
         }
       };
 
-      printIframe.onload = () => {
-        // Small delay so the PDF viewer plugin finishes initializing
-        // before we invoke print.
+      const doc = printIframe.contentWindow?.document;
+      if (!doc) {
+        cleanup();
+        throw new Error("Не удалось открыть окно печати");
+      }
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Печать этикетки</title>
+            <style>
+              @page { size: ${wMm}mm ${hMm}mm; margin: 0; }
+              * { margin: 0; padding: 0; }
+              body {
+                margin: 0;
+                padding: 0;
+                background: white;
+                overflow: hidden;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              img {
+                width: ${wMm}mm;
+                height: ${hMm}mm;
+                display: block;
+                image-rendering: pixelated;
+                image-rendering: -webkit-optimize-contrast;
+                image-rendering: crisp-edges;
+              }
+            </style>
+          </head>
+          <body>
+            <img src="${imgUrl}" />
+          </body>
+        </html>
+      `);
+      doc.close();
+
+      const imgEl = doc.querySelector("img");
+      const triggerPrint = () => {
+        // Small delay so layout settles before the print dialog opens.
         setTimeout(() => {
           try {
             printIframe.contentWindow?.focus();
             printIframe.contentWindow?.print();
           } catch {
-            // If the browser blocks programmatic print of the PDF
-            // iframe, fall back to opening it in a new tab so the user
-            // can print with Ctrl/Cmd+P.
-            window.open(pdfUrl, "_blank");
+            window.open(imgUrl, "_blank");
           }
           setRendering(false);
           // Keep the blob alive long enough for the print dialog.
           setTimeout(cleanup, 5000);
         }, 150);
       };
+      if (imgEl && !imgEl.complete) {
+        imgEl.addEventListener("load", triggerPrint, { once: true });
+        imgEl.addEventListener("error", () => {
+          cleanup();
+          setRendering(false);
+          setToast({ type: "error", message: "Ошибка загрузки изображения" });
+        }, { once: true });
+      } else {
+        triggerPrint();
+      }
     } catch (e: any) {
       setToast({ type: "error", message: e.message || "Ошибка печати." });
       setRendering(false);
