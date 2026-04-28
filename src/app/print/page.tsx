@@ -83,6 +83,52 @@ function parseShelfLifeMonths(storageCond: string | null): number {
   return 12;
 }
 
+// ── Right-pane block ordering ──────────────────────────────────────────
+// Three blocks in the inspector pane that the user can drag-reorder.
+// Order is persisted per browser in localStorage; not synced across users.
+type BlockId = "inspector" | "data" | "print";
+const DEFAULT_BLOCK_ORDER: BlockId[] = ["inspector", "data", "print"];
+const BLOCK_ORDER_KEY = "rezograf-print-block-order";
+
+// Drag handle: 6 dots in 2 columns. The whole handle element is the
+// HTML5 drag source — onDragStart fires from here, the rest of the block
+// is the drop target. Cursor changes to "grab/grabbing" so the affordance
+// is obvious.
+function DragHandle({
+  onDragStart,
+  onDragEnd,
+  dragging,
+  className = "",
+}: {
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  dragging: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      title="Перетащите, чтобы поменять порядок блоков"
+      className={`shrink-0 p-1 rounded text-[var(--theme-text-muted)] hover:text-indigo-500 hover:bg-indigo-500/10 transition-colors ${
+        dragging ? "cursor-grabbing opacity-60" : "cursor-grab"
+      } ${className}`}
+      onClick={(e) => e.preventDefault()}
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <circle cx="5" cy="3" r="1.4" />
+        <circle cx="5" cy="8" r="1.4" />
+        <circle cx="5" cy="13" r="1.4" />
+        <circle cx="11" cy="3" r="1.4" />
+        <circle cx="11" cy="8" r="1.4" />
+        <circle cx="11" cy="13" r="1.4" />
+      </svg>
+    </button>
+  );
+}
+
 export default function PrintPage() {
   const [query, setQuery] = useState("");
   const [currentPath, _setCurrentPath] = useState<string>("");
@@ -141,6 +187,69 @@ export default function PrintPage() {
   // back together: parentDir + "\\" + editFileName.
   const [editFileName, setEditFileName] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // ── Per-browser draggable block order for the right inspector pane ──
+  // Stored in localStorage so each operator's machine remembers its own
+  // layout independently. Multiple users on multiple computers do NOT sync.
+  const [blockOrder, setBlockOrder] = useState<BlockId[]>(DEFAULT_BLOCK_ORDER);
+  const [draggingBlock, setDraggingBlock] = useState<BlockId | null>(null);
+  const [dragOverBlock, setDragOverBlock] = useState<BlockId | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(BLOCK_ORDER_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (
+        Array.isArray(parsed) &&
+        parsed.length === DEFAULT_BLOCK_ORDER.length &&
+        DEFAULT_BLOCK_ORDER.every((id) => parsed.includes(id))
+      ) {
+        setBlockOrder(parsed as BlockId[]);
+      }
+    } catch {
+      /* ignore corrupt storage */
+    }
+  }, []);
+
+  const reorderBlocks = useCallback((from: BlockId, to: BlockId) => {
+    if (from === to) return;
+    setBlockOrder((prev) => {
+      const next = [...prev];
+      const fromIdx = next.indexOf(from);
+      next.splice(fromIdx, 1);
+      const toIdx = next.indexOf(to);
+      next.splice(toIdx, 0, from);
+      try {
+        localStorage.setItem(BLOCK_ORDER_KEY, JSON.stringify(next));
+      } catch {
+        /* localStorage may be full / disabled in private mode */
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBlockDragStart = (id: BlockId) => (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
+    setDraggingBlock(id);
+  };
+  const handleBlockDragOver = (id: BlockId) => (e: React.DragEvent) => {
+    if (!draggingBlock || draggingBlock === id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverBlock !== id) setDragOverBlock(id);
+  };
+  const handleBlockDrop = (id: BlockId) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggingBlock) reorderBlocks(draggingBlock, id);
+    setDraggingBlock(null);
+    setDragOverBlock(null);
+  };
+  const handleBlockDragEnd = () => {
+    setDraggingBlock(null);
+    setDragOverBlock(null);
+  };
 
   // Creation state
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -1013,10 +1122,22 @@ export default function PrintPage() {
         {/* Right pane: Preview & Edit */}
         <div className="w-[340px] md:w-[400px] xl:w-[480px] overflow-y-auto bg-[var(--color-surface)] flex-none border-l border-[var(--theme-border)] flex flex-col shadow-[-8px_0_24px_rgba(0,0,0,0.1)] shrink-0 relative bg-[radial-gradient(var(--theme-overlay)_1px,transparent_1px)] [background-size:16px_16px] backdrop-blur-xl z-20">
           {selected ? (
-            <div className="animate-fade-in p-5 xl:p-6 max-w-full">
-              
+            <div className="animate-fade-in p-5 xl:p-6 max-w-full flex flex-col">
+
               {/* Toolbar */}
-              <div className="flex justify-between items-center mb-6 bg-[var(--theme-overlay)] backdrop-blur-md p-3.5 rounded-xl border border-[var(--theme-border)] shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
+              <div
+                style={{ order: blockOrder.indexOf("inspector") }}
+                onDragOver={handleBlockDragOver("inspector")}
+                onDragLeave={() => dragOverBlock === "inspector" && setDragOverBlock(null)}
+                onDrop={handleBlockDrop("inspector")}
+                className={`flex justify-between items-center mb-6 bg-[var(--theme-overlay)] backdrop-blur-md p-3.5 rounded-xl border shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all ${
+                  draggingBlock === "inspector" ? "opacity-40" : ""
+                } ${
+                  dragOverBlock === "inspector" && draggingBlock !== "inspector"
+                    ? "border-indigo-500 ring-2 ring-indigo-500/40 bg-indigo-500/10"
+                    : "border-[var(--theme-border)]"
+                }`}
+              >
                 <div className="text-[11px] font-bold tracking-wider text-indigo-500 uppercase flex items-center gap-2">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 
                   Инспектор
@@ -1057,13 +1178,38 @@ export default function PrintPage() {
                       </button>
                     </div>
                   )}
+                  <DragHandle
+                    onDragStart={handleBlockDragStart("inspector")}
+                    onDragEnd={handleBlockDragEnd}
+                    dragging={draggingBlock === "inspector"}
+                    className="ml-1 self-center"
+                  />
                 </div>
               </div>
 
               {/* Edit / Details Form */}
-              <div className="glass-card overflow-hidden mb-6">
-                <div className="bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] px-5 py-3 font-bold text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div> Данные {isEditing && <span className="text-indigo-500">(Режим редактирования)</span>}
+              <div
+                style={{ order: blockOrder.indexOf("data") }}
+                onDragOver={handleBlockDragOver("data")}
+                onDragLeave={() => dragOverBlock === "data" && setDragOverBlock(null)}
+                onDrop={handleBlockDrop("data")}
+                className={`glass-card overflow-hidden mb-6 transition-all ${
+                  draggingBlock === "data" ? "opacity-40" : ""
+                } ${
+                  dragOverBlock === "data" && draggingBlock !== "data"
+                    ? "ring-2 ring-indigo-500/50 shadow-[0_0_24px_rgba(99,102,241,0.25)]"
+                    : ""
+                }`}
+              >
+                <div className="bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] px-5 py-3 font-bold text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div> Данные {isEditing && <span className="text-indigo-500">(Режим редактирования)</span>}
+                  </div>
+                  <DragHandle
+                    onDragStart={handleBlockDragStart("data")}
+                    onDragEnd={handleBlockDragEnd}
+                    dragging={draggingBlock === "data"}
+                  />
                 </div>
                 <div className="p-5 flex flex-col gap-4 text-sm text-[var(--theme-text)]">
                   {isEditing ? (
@@ -1187,10 +1333,29 @@ export default function PrintPage() {
               </div>
 
               {/* Action Board (Print Prep) */}
-              <div className="glass-card overflow-hidden mb-6">
-                <div className="bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] px-5 py-3 font-bold text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest flex items-center justify-between">
+              <div
+                style={{ order: blockOrder.indexOf("print") }}
+                onDragOver={handleBlockDragOver("print")}
+                onDragLeave={() => dragOverBlock === "print" && setDragOverBlock(null)}
+                onDrop={handleBlockDrop("print")}
+                className={`glass-card overflow-hidden mb-6 transition-all ${
+                  draggingBlock === "print" ? "opacity-40" : ""
+                } ${
+                  dragOverBlock === "print" && draggingBlock !== "print"
+                    ? "ring-2 ring-indigo-500/50 shadow-[0_0_24px_rgba(99,102,241,0.25)]"
+                    : ""
+                }`}
+              >
+                <div className="bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] px-5 py-3 font-bold text-[10px] text-[var(--theme-text-muted)] uppercase tracking-widest flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div> Подготовка к печати</div>
-                  <div className="text-[10px] font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">70×90 мм</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-[10px] font-bold text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">70×90 мм</div>
+                    <DragHandle
+                      onDragStart={handleBlockDragStart("print")}
+                      onDragEnd={handleBlockDragEnd}
+                      dragging={draggingBlock === "print"}
+                    />
+                  </div>
                 </div>
                 <div className="p-5 flex flex-col gap-5">
                   <div className="flex gap-4">
