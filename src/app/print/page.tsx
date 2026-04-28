@@ -1309,7 +1309,6 @@ export default function PrintPage() {
                         </div>
                         <span className="text-sm font-semibold text-[var(--theme-text)] leading-snug whitespace-pre-wrap break-words">{selected.name || "—"}</span>
                       </div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Оригинал</span><span className="font-mono text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 text-[11px] truncate max-w-[250px]" title={selected.btwFilePath || ""}>{selected.btwFilePath || "—"}</span></div>
                       {selected.btwFilePath && (() => {
                         const seg = selected.btwFilePath.split(/[\\/]/).pop() || "";
                         const dirty = /\.btw[\s\S]+/i.test(seg) || /[\r\n]/.test(seg);
