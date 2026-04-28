@@ -1042,7 +1042,34 @@ export default function PrintPage() {
                 <div className="p-5 flex flex-col gap-4 text-sm text-[var(--theme-text)]">
                   {isEditing ? (
                     <>
-                      <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Название</label><input type="text" className="input-field" value={editForm.name || ""} onChange={e => setEditForm({...editForm, name: e.target.value})} /></div>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs text-gray-400 font-bold uppercase tracking-wider">Название</label>
+                          {editForm.name && (/\.btw\b|\r|\n/.test(editForm.name)) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cleaned = (editForm.name || "")
+                                  .replace(/\r\n?|\n/g, " ")
+                                  .replace(/\.btw\b/gi, "")
+                                  .replace(/\s+/g, " ")
+                                  .trim();
+                                setEditForm({ ...editForm, name: cleaned });
+                              }}
+                              className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 transition-colors cursor-pointer"
+                              title="Убрать .btw, переносы строк и лишние пробелы"
+                            >
+                              ✨ Очистить
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          className="input-field min-h-[60px] whitespace-pre-wrap"
+                          value={editForm.name || ""}
+                          onChange={e => setEditForm({...editForm, name: e.target.value})}
+                          rows={2}
+                        />
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Артикул</label><input type="text" className="input-field" value={editForm.sku || ""} onChange={e => setEditForm({...editForm, sku: e.target.value})} /></div>
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Артикул 2 <span className="text-[10px] font-normal opacity-60">(для сетей)</span></label><input type="text" className="input-field" value={editForm.sku2 || ""} onChange={e => setEditForm({...editForm, sku2: e.target.value})} /></div>
@@ -1058,6 +1085,15 @@ export default function PrintPage() {
                     </>
                   ) : (
                     <>
+                      <div className="flex flex-col border-b border-[var(--theme-border)] pb-2.5">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[var(--theme-text-muted)] text-xs">Название</span>
+                          {selected.name && /\.btw\b|\r|\n/.test(selected.name) && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20" title="В названии есть .btw или перенос строки — нужно почистить через «Редактировать»">⚠ Нечистое</span>
+                          )}
+                        </div>
+                        <span className="text-sm font-semibold text-[var(--theme-text)] leading-snug whitespace-pre-wrap break-words">{selected.name || "—"}</span>
+                      </div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Оригинал</span><span className="font-mono text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 text-[11px] truncate max-w-[250px]" title={selected.btwFilePath || ""}>{selected.btwFilePath || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Артикул{selected.sku2 ? " / Артикул 2" : ""}</span><span className="font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded tracking-widest text-[11px]">{[selected.sku, selected.sku2].filter(Boolean).join(" / ") || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Штрихкод</span><span className="font-mono text-[var(--theme-text)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] px-2 py-0.5 rounded tracking-wider text-[11px]">{selected.barcodeEan13 || "—"}</span></div>
