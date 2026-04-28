@@ -223,9 +223,22 @@ export async function POST(req: NextRequest) {
   const vpHeight = Math.max(heightMm * 10 * 2, 2000);
 
   // Image path needs a super-sampled raster; PDF path is vector so dsf=3 is fine.
-  // dsf=6 gives 36× supersample (plenty for threshold → 203 DPI output) and
-  // renders ~4× faster than dsf=12 on CPU-bound hosts like the prod VM.
-  const dsf = format === "image" ? 6 : 3;
+  //
+  // ⚠ DO NOT lower this below 12 for the image path. The pipeline is
+  // screenshot → grayscale → threshold(120) → resize(target, nearest). After
+  // the threshold the image is binary, so the nearest-neighbor downsample
+  // picks ONE source pixel per destination pixel. With dsf=12 every output
+  // pixel maps to ~144 source samples, and the picked one is statistically
+  // representative — text edges look clean. With dsf=6 the window collapses
+  // to ~36 samples and the picked pixel flips back-and-forth across glyph
+  // edges at oblique angles, producing visibly wavy / aliased text on the
+  // thermal printer (operators reported "не читаемый текст" twice now —
+  // once with the original implementation and again after a perf "fix"
+  // dropped this to 6 in 64c8985). If a future perf pass wants to reduce
+  // CPU here, the right move is to swap the order to lanczos-downsample →
+  // threshold (smooth grayscale resample, then 1-bit cutoff), not to
+  // shrink dsf.
+  const dsf = format === "image" ? 12 : 3;
 
   const doRender = async () => {
     const browser = await getBrowser();
