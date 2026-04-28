@@ -1130,7 +1130,7 @@ export default function PrintPage() {
                 onDragOver={handleBlockDragOver("inspector")}
                 onDragLeave={() => dragOverBlock === "inspector" && setDragOverBlock(null)}
                 onDrop={handleBlockDrop("inspector")}
-                className={`flex justify-between items-center mb-6 bg-[var(--theme-overlay)] backdrop-blur-md p-3.5 rounded-xl border shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all ${
+                className={`flex flex-col gap-3.5 mb-6 bg-[var(--theme-overlay)] backdrop-blur-md px-4 py-4 rounded-xl border shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all ${
                   draggingBlock === "inspector" ? "opacity-40" : ""
                 } ${
                   dragOverBlock === "inspector" && draggingBlock !== "inspector"
@@ -1138,15 +1138,28 @@ export default function PrintPage() {
                     : "border-[var(--theme-border)]"
                 }`}
               >
-                <div className="text-[11px] font-bold tracking-wider text-indigo-500 uppercase flex items-center gap-2">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 
-                  Инспектор
+                {/* Header row: title + drag handle */}
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-bold tracking-wider text-indigo-500 uppercase flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    Инспектор
+                  </div>
+                  <DragHandle
+                    onDragStart={handleBlockDragStart("inspector")}
+                    onDragEnd={handleBlockDragEnd}
+                    dragging={draggingBlock === "inspector"}
+                  />
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+
+                {/* Divider */}
+                <div className="h-px bg-gradient-to-r from-transparent via-[var(--theme-border)] to-transparent"></div>
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
                   {!isEditing ? (
                     <>
                       {selected.category && selected.category !== currentPath && (
-                        <button 
+                        <button
                           onClick={() => {
                             setCurrentPath(selected.category!);
                           }}
@@ -1171,19 +1184,13 @@ export default function PrintPage() {
                       </button>
                     </>
                   ) : (
-                    <div className="flex gap-2">
+                    <>
                       <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-overlay)] rounded-lg transition-colors cursor-pointer border border-transparent">Отмена</button>
                       <button onClick={saveEdit} disabled={savingEdit} className="py-1.5 px-4 text-[11px] font-bold uppercase tracking-wide bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-400 hover:to-purple-400 rounded-lg shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all cursor-pointer border border-transparent disabled:opacity-50 flex items-center gap-1">
                         {savingEdit ? "Сохранение..." : "💾 Сохранить"}
                       </button>
-                    </div>
+                    </>
                   )}
-                  <DragHandle
-                    onDragStart={handleBlockDragStart("inspector")}
-                    onDragEnd={handleBlockDragEnd}
-                    dragging={draggingBlock === "inspector"}
-                    className="ml-1 self-center"
-                  />
                 </div>
               </div>
 
