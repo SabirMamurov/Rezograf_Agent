@@ -853,12 +853,12 @@ export default function PrintPage() {
                 ) : (
                   searchResults.map((p, i) => {
                     const isActive = i === searchActiveIdx;
-                    // Strip ".btw" AND anything after it (some imported file names
-                    // had trailing notes like ".btw\nНовый не брать !!!" baked in).
-                    // The underlying btwFilePath isn't changed — this is display-only.
+                    // Show the full last segment of btwFilePath, only stripping a
+                    // trailing ".btw" extension. Operators rely on the appended
+                    // notes (e.g. "...gr.btw\nНовый не брать !!!") to distinguish
+                    // duplicate products in the dropdown — do NOT collapse them.
                     const fileName = (p.btwFilePath?.split(/[/\\]/).pop() || "")
-                      .replace(/\.btw[\s\S]*$/i, "")
-                      .trim();
+                      .replace(/\.btw$/i, "");
                     return (
                       <button
                         key={p.id}
@@ -874,7 +874,7 @@ export default function PrintPage() {
                           <span className="flex items-center gap-1 text-indigo-500/90">
                             <FolderIcon className="w-3 h-3" /> {p.category || "Без папки"}
                           </span>
-                          {fileName && <span className="opacity-70">{fileName}</span>}
+                          {fileName && <span className="opacity-70 whitespace-pre-wrap break-words">{fileName}</span>}
                           {p.sku && <span>Арт: {highlight(p.sku, query)}</span>}
                           {p.barcodeEan13 && <span>ШК: {highlight(p.barcodeEan13, query)}</span>}
                         </div>
