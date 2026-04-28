@@ -856,9 +856,9 @@ export default function PrintPage() {
                     // Strip ".btw" AND anything after it (some imported file names
                     // had trailing notes like ".btw\nНовый не брать !!!" baked in).
                     // The underlying btwFilePath isn't changed — this is display-only.
-                    const fileNameRaw = p.btwFilePath?.split(/[/\\]/).pop() || "";
-                    const fileNameDirty = /\.btw[\s\S]+/i.test(fileNameRaw) || /[\r\n]/.test(fileNameRaw);
-                    const fileName = fileNameRaw.replace(/\.btw[\s\S]*$/i, "").trim();
+                    const fileName = (p.btwFilePath?.split(/[/\\]/).pop() || "")
+                      .replace(/\.btw[\s\S]*$/i, "")
+                      .trim();
                     return (
                       <button
                         key={p.id}
@@ -874,14 +874,7 @@ export default function PrintPage() {
                           <span className="flex items-center gap-1 text-indigo-500/90">
                             <FolderIcon className="w-3 h-3" /> {p.category || "Без папки"}
                           </span>
-                          {fileName && (
-                            <span className={`opacity-70 ${fileNameDirty ? "italic" : ""}`}>
-                              {fileName}
-                              {fileNameDirty && (
-                                <span className="ml-1 not-italic font-bold text-amber-500" title="Имя файла содержит .btw или перенос строки — почистите через инспектор → Редактировать">⚠</span>
-                              )}
-                            </span>
-                          )}
+                          {fileName && <span className="opacity-70">{fileName}</span>}
                           {p.sku && <span>Арт: {highlight(p.sku, query)}</span>}
                           {p.barcodeEan13 && <span>ШК: {highlight(p.barcodeEan13, query)}</span>}
                         </div>
