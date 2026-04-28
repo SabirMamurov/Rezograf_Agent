@@ -135,6 +135,11 @@ export default function PrintPage() {
   
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Product>>({});
+  // editFileName is the LAST segment of btwFilePath (just the filename with .btw),
+  // edited separately because btwFilePath is a Windows-style path and the user
+  // should only rename the file, not move it. On save we glue the parent path
+  // back together: parentDir + "\\" + editFileName.
+  const [editFileName, setEditFileName] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Creation state
@@ -472,6 +477,12 @@ export default function PrintPage() {
       storageCond: selected.storageCond || "",
       composition: selected.composition || "",
     });
+    // Pull the file name (last segment) out of btwFilePath so the user
+    // can rename the .btw file without manipulating the full Windows path.
+    const lastSegment = selected.btwFilePath
+      ? selected.btwFilePath.split(/[\\/]/).pop() || ""
+      : "";
+    setEditFileName(lastSegment);
     setIsEditing(true);
   };
 
@@ -479,10 +490,20 @@ export default function PrintPage() {
     if (!selected) return;
     setSavingEdit(true);
     try {
+      // Rebuild btwFilePath if the user changed the file name. Take everything
+      // up to and including the last separator and append the new file name.
+      // If the file name is empty, leave btwFilePath alone (don't accidentally
+      // detach the product from the folder tree).
+      const payload: Record<string, unknown> = { id: selected.id, ...editForm };
+      if (selected.btwFilePath && editFileName.trim()) {
+        const parts = selected.btwFilePath.split(/[\\/]/);
+        const parent = parts.slice(0, -1).join("\\");
+        payload.btwFilePath = parent ? `${parent}\\${editFileName.trim()}` : editFileName.trim();
+      }
       const res = await fetch(`/api/products`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selected.id, ...editForm }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to save");
       const updated = await res.json();
@@ -832,7 +853,12 @@ export default function PrintPage() {
                 ) : (
                   searchResults.map((p, i) => {
                     const isActive = i === searchActiveIdx;
-                    const fileName = p.btwFilePath?.split(/[/\\]/).pop()?.replace(/\.btw$/i, "") || "";
+                    // Strip ".btw" AND anything after it (some imported file names
+                    // had trailing notes like ".btw\nНовый не брать !!!" baked in).
+                    // The underlying btwFilePath isn't changed — this is display-only.
+                    const fileNameRaw = p.btwFilePath?.split(/[/\\]/).pop() || "";
+                    const fileNameDirty = /\.btw[\s\S]+/i.test(fileNameRaw) || /[\r\n]/.test(fileNameRaw);
+                    const fileName = fileNameRaw.replace(/\.btw[\s\S]*$/i, "").trim();
                     return (
                       <button
                         key={p.id}
@@ -848,7 +874,14 @@ export default function PrintPage() {
                           <span className="flex items-center gap-1 text-indigo-500/90">
                             <FolderIcon className="w-3 h-3" /> {p.category || "Без папки"}
                           </span>
-                          {fileName && <span className="opacity-70">{fileName}</span>}
+                          {fileName && (
+                            <span className={`opacity-70 ${fileNameDirty ? "italic" : ""}`}>
+                              {fileName}
+                              {fileNameDirty && (
+                                <span className="ml-1 not-italic font-bold text-amber-500" title="Имя файла содержит .btw или перенос строки — почистите через инспектор → Редактировать">⚠</span>
+                              )}
+                            </span>
+                          )}
                           {p.sku && <span>Арт: {highlight(p.sku, query)}</span>}
                           {p.barcodeEan13 && <span>ШК: {highlight(p.barcodeEan13, query)}</span>}
                         </div>
@@ -1070,6 +1103,44 @@ export default function PrintPage() {
                           rows={2}
                         />
                       </div>
+                      {selected.btwFilePath && (
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs text-gray-400 font-bold uppercase tracking-wider">
+                              Имя файла <span className="text-[10px] font-normal opacity-60">(.btw)</span>
+                            </label>
+                            {(/\.btw[\s\S]+|\r|\n/.test(editFileName) || /\s\.btw$/i.test(editFileName)) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // Strip everything after the first ".btw" (incl. that .btw),
+                                  // collapse whitespace, then put a single ".btw" at the end.
+                                  const base = editFileName
+                                    .replace(/\r\n?|\n/g, " ")
+                                    .replace(/\.btw[\s\S]*$/i, "")
+                                    .replace(/\s+/g, " ")
+                                    .trim();
+                                  setEditFileName(base + ".btw");
+                                }}
+                                className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 transition-colors cursor-pointer"
+                                title="Убрать всё после .btw, переносы строк и лишние пробелы"
+                              >
+                                ✨ Очистить
+                              </button>
+                            )}
+                          </div>
+                          <textarea
+                            className="input-field min-h-[44px] whitespace-pre-wrap font-mono text-[12px]"
+                            value={editFileName}
+                            onChange={e => setEditFileName(e.target.value)}
+                            rows={2}
+                            placeholder="название.btw"
+                          />
+                          <p className="text-[10px] text-[var(--theme-text-muted)] mt-1">
+                            Папка остаётся прежней — меняется только имя самого файла.
+                          </p>
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Артикул</label><input type="text" className="input-field" value={editForm.sku || ""} onChange={e => setEditForm({...editForm, sku: e.target.value})} /></div>
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Артикул 2 <span className="text-[10px] font-normal opacity-60">(для сетей)</span></label><input type="text" className="input-field" value={editForm.sku2 || ""} onChange={e => setEditForm({...editForm, sku2: e.target.value})} /></div>
@@ -1095,6 +1166,21 @@ export default function PrintPage() {
                         <span className="text-sm font-semibold text-[var(--theme-text)] leading-snug whitespace-pre-wrap break-words">{selected.name || "—"}</span>
                       </div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Оригинал</span><span className="font-mono text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 text-[11px] truncate max-w-[250px]" title={selected.btwFilePath || ""}>{selected.btwFilePath || "—"}</span></div>
+                      {selected.btwFilePath && (() => {
+                        const seg = selected.btwFilePath.split(/[\\/]/).pop() || "";
+                        const dirty = /\.btw[\s\S]+/i.test(seg) || /[\r\n]/.test(seg);
+                        return (
+                          <div className="flex flex-col border-b border-[var(--theme-border)] pb-2.5">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[var(--theme-text-muted)] text-xs">Имя файла</span>
+                              {dirty && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20" title="В имени файла есть .btw в середине или перенос строки — почистите через «Редактировать»">⚠ Нечистое</span>
+                              )}
+                            </div>
+                            <span className="text-xs font-mono text-[var(--theme-text)] bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap break-all">{seg}</span>
+                          </div>
+                        );
+                      })()}
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Артикул{selected.sku2 ? " / Артикул 2" : ""}</span><span className="font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded tracking-widest text-[11px]">{[selected.sku, selected.sku2].filter(Boolean).join(" / ") || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Штрихкод</span><span className="font-mono text-[var(--theme-text)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] px-2 py-0.5 rounded tracking-wider text-[11px]">{selected.barcodeEan13 || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Масса</span><span className="font-semibold text-[var(--theme-text)]">{selected.weight || "—"}</span></div>
