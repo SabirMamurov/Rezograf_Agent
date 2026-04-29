@@ -12,6 +12,41 @@ function calcEan13CheckDigit(code12: string): number {
 }
 
 /**
+ * Calculate GTIN-14 / ITF-14 check digit from the first 13 digits.
+ * Equivalent to: from RIGHT, odd positions ×3, even positions ×1.
+ * From LEFT (used here): odd positions ×3, even positions ×1.
+ */
+function calcItf14CheckDigit(code13: string): number {
+  let sum = 0;
+  for (let i = 0; i < 13; i++) {
+    sum += parseInt(code13[i]) * (i % 2 === 0 ? 3 : 1);
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
+/**
+ * Normalize a barcode value for STORAGE in the DB. Mirrors the company's
+ * convention so the stored value matches what BarTender would print:
+ *   - 13 digits with prefix "2" → ITF-14 (transport): append GTIN-14 check → 14 digits
+ *   - 12 digits                 → EAN-13 (consumer): append check → 13 digits
+ *   - empty / null              → null
+ *   - anything else (8, 13 non-"2" prefix, 14, non-digit) → kept verbatim
+ *
+ * Operators type the user-input portion of the code (12 digits for EAN-13,
+ * 13 digits for ITF-14); the print engine in BarTender used to add the
+ * check digit at print time. Now that we own the rendering, we add it on
+ * write so DB and printed barcode are always 1-to-1.
+ */
+export function normalizeStoredBarcode(input: string | null | undefined): string | null {
+  const v = (input ?? "").trim();
+  if (!v) return null;
+  if (!/^\d+$/.test(v)) return v; // pass through anything non-numeric (rare/manual)
+  if (v.length === 12) return v + calcEan13CheckDigit(v);
+  if (v.length === 13 && v.startsWith("2")) return v + calcItf14CheckDigit(v);
+  return v;
+}
+
+/**
  * Normalize barcode and determine its type.
  * 
  * Rules (per business logic):

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeStoredBarcode } from "@/lib/barcodes";
 
 // SQLite's LOWER()/LIKE are ASCII-only — they do NOT lowercase Cyrillic.
 // `LOWER('Кедровая')` returns `'Кедровая'` unchanged, so a SQL substring
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
       nutritionalInfo: body.nutritionalInfo || null,
       storageCond: body.storageCond || null,
       manufacturer: body.manufacturer || null,
-      barcodeEan13: body.barcodeEan13 || null,
+      barcodeEan13: normalizeStoredBarcode(body.barcodeEan13),
       btwFilePath: body.btwFilePath || null,
       certCode: body.certCode || null,
       quantity: body.quantity || null,
@@ -159,6 +160,12 @@ export async function PATCH(req: NextRequest) {
     if (key in data) {
       updateData[key] = data[key] || null;
     }
+  }
+  // Normalize barcode on edit too: if operator types 13 digits with '2' prefix
+  // → save 14-digit ITF-14 with computed check; if 12 digits → save 13-digit
+  // EAN-13 with check. Mirrors the rule applied to existing data.
+  if ("barcodeEan13" in updateData) {
+    updateData.barcodeEan13 = normalizeStoredBarcode(updateData.barcodeEan13);
   }
 
   const product = await prisma.product.update({
