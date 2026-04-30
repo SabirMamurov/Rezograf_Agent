@@ -381,6 +381,9 @@ export default function PrintPage() {
     setSearchOpen(false);
     setSearchResults([]);
     setSearchActiveIdx(0);
+    // Reset manufacturing date to today on every product switch — operators
+    // don't expect a date typed for one label to carry over to the next.
+    setMfgDateStr(toInputDate(new Date()));
   };
 
   // Highlight matched substring in search results (case-insensitive)
