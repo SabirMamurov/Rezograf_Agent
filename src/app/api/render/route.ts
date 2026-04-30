@@ -430,6 +430,14 @@ function buildLabelHtml(
   };
   const showComposition = !isCompositionDuplicate(product.name, product.composition);
 
+  // Manufacturer block is hardcoded by default ("ООО Эко-фабрика…"). Single
+  // exception: products under "Цех ПЦО\Орехи\ИП Абдуалиев" use a different
+  // legal entity. Match by btwFilePath, case-insensitive. Keep this aligned
+  // with src/components/LabelPreview.tsx.
+  const isAbdualievProduct =
+    typeof product?.btwFilePath === "string" &&
+    /\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\/i.test(product.btwFilePath);
+
   const alu41Src = iconDataUris?.alu41 || "/icons/alu41.png";
   const eacSrc = iconDataUris?.eac || "/icons/eac.png";
   const forkGlassSrc = iconDataUris?.fork_glass || "/icons/fork_glass.png";
@@ -538,10 +546,15 @@ ${fontStyleBlock}
 
       <!-- Manufacturer info -->
       <div style="font-size: 24px; font-weight: 700; text-align: center; line-height: 1.15; margin-bottom: 3px;">
-        Изготовитель: ООО &quot;Эко-фабрика Сибирский Кедр&quot;<br />
+        ${isAbdualievProduct
+          ? `Изготовитель: ИП Абдуалиев В.Г.<br />
+        Тел.: + 7 913-851-49-49<br />
+        Адрес: Россия, 634015, Томская область, гор. Томск,<br />
+        ул. Айвазовского, д. 29 стр. 6`
+          : `Изготовитель: ООО &quot;Эко-фабрика Сибирский Кедр&quot;<br />
         тел. (3822) 311-175<br />
         Адрес: Россия, 634593, Томская область, Томский район,<br />
-        д. Петрово, ул. Луговая, 11
+        д. Петрово, ул. Луговая, 11`}
       </div>
 
       <!-- Product Name -->
