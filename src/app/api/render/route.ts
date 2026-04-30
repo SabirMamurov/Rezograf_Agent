@@ -430,13 +430,13 @@ function buildLabelHtml(
   };
   const showComposition = !isCompositionDuplicate(product.name, product.composition);
 
-  // Manufacturer block is hardcoded by default ("ООО Эко-фабрика…"). Single
-  // exception: products under "Цех ПЦО\Орехи\ИП Абдуалиев" use a different
-  // legal entity. Match by btwFilePath, case-insensitive. Keep this aligned
-  // with src/components/LabelPreview.tsx.
+  // Manufacturer block is hardcoded by default ("ООО Эко-фабрика…"). Two
+  // folders use the IP Abdualiev legal entity instead: "Цех ПЦО\Орехи\ИП
+  // Абдуалиев" and "МП\ПЦПО". Match by btwFilePath, case-insensitive. Keep
+  // this aligned with src/components/LabelPreview.tsx.
   const isAbdualievProduct =
     typeof product?.btwFilePath === "string" &&
-    /\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\/i.test(product.btwFilePath);
+    /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
   const alu41Src = iconDataUris?.alu41 || "/icons/alu41.png";
   const eacSrc = iconDataUris?.eac || "/icons/eac.png";
