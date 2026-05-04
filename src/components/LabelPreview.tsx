@@ -100,6 +100,100 @@ export default function LabelPreview({
     typeof product?.btwFilePath === "string" &&
     /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
+  // ШК (showbox barcode-only) labels: products under "ШБ ТУЛА\ШК\" use a
+  // stripped-down template — title + optional subtitle + large barcode.
+  // Subtitle is taken from product.weight (re-purposed for these rows).
+  // Keep aligned with buildShkLabelHtml in src/app/api/render/route.ts.
+  const isShkLabel =
+    typeof product?.btwFilePath === "string" &&
+    /\\ШБ ТУЛА\\ШК\\/i.test(product.btwFilePath);
+  if (isShkLabel) {
+    const subtitle = (product?.weight || "").trim();
+    const title = product?.name || "";
+    return (
+      <div
+        className="label-preview-frame"
+        style={{
+          width: widthPx + "px",
+          height: heightPx + "px",
+          position: "relative",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+          borderRadius: "2px",
+          backgroundColor: "white",
+          margin: "auto",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          className="canvas"
+          style={{
+            width: V_WIDTH + "px",
+            height: V_HEIGHT + "px",
+            transform: `scale(${renderScale})`,
+            transformOrigin: "top left",
+            overflow: "hidden",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            style={{
+              width: V_WIDTH + "px",
+              fontFamily: "'Roboto Condensed', sans-serif",
+              fontWeight: 700,
+              color: "black",
+              padding: "30px 24px 20px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              boxSizing: "border-box",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "44px",
+                fontWeight: 700,
+                textAlign: "center",
+                lineHeight: 1.1,
+                textDecoration: "underline",
+                textDecorationThickness: "3px",
+                textUnderlineOffset: "5px",
+                marginBottom: "14px",
+              }}
+            >
+              {title}
+            </div>
+            {subtitle && (
+              <div
+                style={{
+                  fontSize: "32px",
+                  fontWeight: 500,
+                  textAlign: "center",
+                  lineHeight: 1.1,
+                  marginBottom: "30px",
+                }}
+              >
+                {subtitle}
+              </div>
+            )}
+            <div
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {barcodeSvg && (
+                <div style={{ width: "90%" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="label-preview-frame"

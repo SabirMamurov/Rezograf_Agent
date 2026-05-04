@@ -404,6 +404,105 @@ function loadIconsAsBase64(): Record<string, string> {
 }
 
 /**
+ * Stripped-down "ШК" template — used only for products under
+ * \ШБ ТУЛА\ШК\. Layout matches operators' physical sticker:
+ *   - underlined product name (title)
+ *   - subtitle in parens (taken from product.weight, re-purposed)
+ *   - large EAN-13 barcode centered below
+ * No manufacturer block, no icons, no dates. Same 70×90mm physical size.
+ *
+ * Visuals must mirror LabelPreview.tsx ШК branch.
+ */
+function buildShkLabelHtml(
+  product: any,
+  barcodeSvg: string,
+  widthMm: number,
+  heightMm: number,
+  embeddedFontCss?: string,
+): string {
+  const fontStyleBlock = embeddedFontCss && embeddedFontCss.length > 0
+    ? `<style>${embeddedFontCss}</style>`
+    : `<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700;900&subset=cyrillic,cyrillic-ext,latin&display=swap" rel="stylesheet">`;
+
+  const subtitle = (product?.weight || "").trim();
+  const title = product?.name || "";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+${fontStyleBlock}
+<style>
+  @page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-font-smoothing: none !important;
+      -moz-osx-font-smoothing: grayscale !important;
+      text-rendering: geometricPrecision !important;
+      font-smooth: never !important; }
+  html, body { width: ${widthMm}mm; height: ${heightMm}mm; margin: 0; padding: 0; background: white; overflow: hidden; }
+  .outer { width: ${widthMm}mm; height: ${heightMm}mm; overflow: hidden; }
+  .canvas { width: ${widthMm * 10}px; height: ${heightMm * 10}px; box-sizing: border-box; }
+  .inner {
+    width: ${widthMm * 10}px;
+    font-family: 'Roboto Condensed', sans-serif;
+    font-weight: 700;
+    color: black;
+    padding: 30px 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    box-sizing: border-box;
+  }
+  .shk-title {
+    font-size: 44px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.1;
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 5px;
+    margin-bottom: 14px;
+  }
+  .shk-subtitle {
+    font-size: 32px;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1.1;
+    margin-bottom: 30px;
+  }
+  .shk-barcode {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .shk-barcode > div { width: 90%; }
+  img { -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+        image-rendering: pixelated; }
+</style>
+</head>
+<body>
+  <div class="outer">
+    <div class="canvas">
+      <div class="inner">
+        <div class="shk-title">${escapeHtml(title)}</div>
+        ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
+        <div class="shk-barcode">
+          ${barcodeSvg ? `<div>${barcodeSvg}</div>` : ""}
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
  * Builds label HTML with fixed width (700px) but NO fixed height.
  * Content flows naturally — Puppeteer will measure the real height and
  * compute the perfect scale factor to fit 70×90mm.
@@ -437,6 +536,17 @@ function buildLabelHtml(
   const isAbdualievProduct =
     typeof product?.btwFilePath === "string" &&
     /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
+
+  // ШК (showbox barcode-only) labels: products under "ШБ ТУЛА\ШК\" use a
+  // stripped-down template — just title + optional subtitle + large barcode.
+  // No manufacturer, no icons, no dates, no nutritionals. Subtitle is
+  // re-purposed from the `weight` field for these rows.
+  const isShkLabel =
+    typeof product?.btwFilePath === "string" &&
+    /\\ШБ ТУЛА\\ШК\\/i.test(product.btwFilePath);
+  if (isShkLabel) {
+    return buildShkLabelHtml(product, barcodeSvg, widthMm, heightMm, embeddedFontCss);
+  }
 
   const alu41Src = iconDataUris?.alu41 || "/icons/alu41.png";
   const eacSrc = iconDataUris?.eac || "/icons/eac.png";
