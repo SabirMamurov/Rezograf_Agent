@@ -177,6 +177,14 @@ export default function PrintPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const [mfgDateStr, setMfgDateStr] = useState("");
+  // Optional manual override for the "годен до" (use-by) date.
+  // Default behaviour: auto-compute from mfgDateStr + shelf-life months in
+  // selected.storageCond. Operators sometimes need a different value (custom
+  // shelf life, special batch, fix mistakes in storageCond) — when they pick
+  // any date, it overrides the auto value. ↺ Авто in the UI clears the
+  // override and goes back to auto. Reset to null whenever the operator
+  // switches to a different product.
+  const [expDateOverrideStr, setExpDateOverrideStr] = useState<string | null>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   
   const [isEditing, setIsEditing] = useState(false);
@@ -278,17 +286,31 @@ export default function PrintPage() {
     setMfgDateStr(toInputDate(new Date()));
   }, []);
 
-  const { mfgDateFormatted, expDateFormatted } = useMemo(() => {
-    if (!mfgDateStr) return { mfgDateFormatted: "...", expDateFormatted: "..." };
+  const { mfgDateFormatted, expDateFormatted, autoExpDateStr } = useMemo(() => {
+    if (!mfgDateStr) {
+      return { mfgDateFormatted: "...", expDateFormatted: "...", autoExpDateStr: "" };
+    }
     const mfg = new Date(mfgDateStr + "T00:00:00");
     const months = parseShelfLifeMonths(selected?.storageCond ?? null);
-    const exp = new Date(mfg);
-    exp.setMonth(exp.getMonth() + months);
+    const auto = new Date(mfg);
+    auto.setMonth(auto.getMonth() + months);
+    // If the operator manually overrode the use-by date, that wins; otherwise
+    // we use the auto-computed one.
+    const exp = expDateOverrideStr
+      ? new Date(expDateOverrideStr + "T00:00:00")
+      : auto;
     return {
       mfgDateFormatted: formatDate(mfg),
       expDateFormatted: formatDate(exp),
+      autoExpDateStr: toInputDate(auto),
     };
-  }, [mfgDateStr, selected?.storageCond]);
+  }, [mfgDateStr, selected?.storageCond, expDateOverrideStr]);
+
+  const isExpDateManual = expDateOverrideStr !== null;
+  // Value for <input type="date">. When override is active show that, otherwise
+  // pre-populate with the auto value so the operator can tweak from a sensible
+  // starting point with one click on the date picker.
+  const expDateInputStr = expDateOverrideStr ?? autoExpDateStr;
 
   const loadFolderData = () => {
     setLoading(true);
@@ -384,6 +406,9 @@ export default function PrintPage() {
     // Reset manufacturing date to today on every product switch — operators
     // don't expect a date typed for one label to carry over to the next.
     setMfgDateStr(toInputDate(new Date()));
+    // Same logic for the use-by override: don't carry a one-off override
+    // from one label onto the next.
+    setExpDateOverrideStr(null);
   };
 
   // Highlight matched substring in search results (case-insensitive)
@@ -1367,14 +1392,53 @@ export default function PrintPage() {
                 <div className="p-5 flex flex-col gap-5">
                   <div className="flex gap-4">
                     <div className="flex-1">
-                      <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] mb-1.5 tracking-wider">ДАТА ИЗГОТОВЛЕНИЯ</label>
+                      <div className="flex items-center justify-between mb-1.5 min-h-[18px]">
+                        <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] tracking-wider">ДАТА ИЗГОТОВЛЕНИЯ</label>
+                      </div>
                       <input type="date" value={mfgDateStr} onChange={e => setMfgDateStr(e.target.value)} className="w-full bg-[var(--theme-input-bg)] text-[var(--theme-text)] border border-[var(--theme-border)] p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono cursor-pointer transition-all" />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] mb-1.5 tracking-wider">ГОДЕН ДО</label>
-                      <div className="w-full bg-[var(--theme-input-bg)] border border-[var(--theme-border)] p-2.5 rounded-xl text-sm font-mono text-[var(--theme-text)] flex items-center shadow-inner">
-                        <span className="text-cyan-500">{expDateFormatted}</span> <span className="ml-auto font-sans font-medium text-[11px] text-[var(--theme-text-muted)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] px-2 rounded-md py-0.5">{parseShelfLifeMonths(selected.storageCond)} мес</span>
+                      <div className="flex items-center justify-between mb-1.5 min-h-[18px] gap-2">
+                        <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] tracking-wider">ГОДЕН ДО</label>
+                        {isExpDateManual ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpDateOverrideStr(null)}
+                            title="Сбросить к автоматической дате (изготовление + срок хранения)"
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 cursor-pointer transition-all flex items-center gap-1"
+                          >
+                            ↺ Авто
+                          </button>
+                        ) : (
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border border-[var(--theme-border)]"
+                            title="Срок хранения, считанный из поля «Срок и условия»"
+                          >
+                            {parseShelfLifeMonths(selected.storageCond)} мес
+                          </span>
+                        )}
                       </div>
+                      <input
+                        type="date"
+                        value={expDateInputStr}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          // If the picked date matches the auto value (or is
+                          // empty), drop the override so we go back to auto and
+                          // future shelf-life changes take effect.
+                          if (!v || v === autoExpDateStr) {
+                            setExpDateOverrideStr(null);
+                          } else {
+                            setExpDateOverrideStr(v);
+                          }
+                        }}
+                        title={isExpDateManual ? "Ручная дата — клик «↺ Авто», чтобы вернуть автоматический расчёт" : "Авто-дата от изготовления + срока хранения; смените, чтобы переопределить"}
+                        className={`w-full bg-[var(--theme-input-bg)] p-2.5 rounded-xl text-sm font-mono outline-none cursor-pointer transition-all border ${
+                          isExpDateManual
+                            ? "border-amber-500/50 text-amber-600 focus:ring-2 focus:ring-amber-500/40"
+                            : "border-[var(--theme-border)] text-cyan-500 focus:ring-2 focus:ring-cyan-500/40"
+                        }`}
+                      />
                     </div>
                   </div>
                   
