@@ -282,6 +282,23 @@ export default function PrintPage() {
 
   const basePrefix = 'C:\\Users\\Пользователь\\Desktop\\extracted_labels\\';
 
+  // Derive the FULL hierarchical folder path of a product from its
+  // btwFilePath. The Product.category column only holds the leaf folder name
+  // (e.g. "ВЕСОВЫЕ конфеты 1 кг"), but the virtual folder tree on the left
+  // expects the full path ("Цех ПЦО\\ВЕСОВЫЕ конфеты 1 кг") — see
+  // CLAUDE.md > Virtual folder tree. Using just .category for navigation
+  // jumped to a non-existent leaf and the API returned no folders/files.
+  const getProductFolderPath = useCallback((p: Product): string => {
+    if (p.btwFilePath) {
+      let rel = p.btwFilePath;
+      if (rel.startsWith(basePrefix)) rel = rel.slice(basePrefix.length);
+      const parts = rel.split(/[\\/]/);
+      parts.pop(); // drop the filename, keep the folder chain
+      return parts.join('\\');
+    }
+    return p.category ?? "";
+  }, [basePrefix]);
+
   useEffect(() => {
     setMfgDateStr(toInputDate(new Date()));
   }, []);
@@ -1185,17 +1202,23 @@ export default function PrintPage() {
                 {/* Action buttons */}
                 {!isEditing ? (
                   <div className="grid grid-cols-2 gap-2">
-                    {selected.category && selected.category !== currentPath && (
-                      <button
-                        onClick={() => {
-                          setCurrentPath(selected.category!);
-                        }}
-                        className="col-span-2 py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                        title={`Перейти к списку файлов в папке: ${selected.category}`}
-                      >
-                        📂 К товару
-                      </button>
-                    )}
+                    {(() => {
+                      // Use the full hierarchical path, not just the leaf
+                      // segment in selected.category (which the previous
+                      // version used and which broke navigation by jumping
+                      // to a non-existent root-level leaf).
+                      const productFolder = getProductFolderPath(selected);
+                      if (!productFolder || productFolder === currentPath) return null;
+                      return (
+                        <button
+                          onClick={() => setCurrentPath(productFolder)}
+                          className="col-span-2 py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          title={`Перейти к папке: ${productFolder}`}
+                        >
+                          📂 К товару
+                        </button>
+                      );
+                    })()}
                     <button onClick={openMoveFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
                       📦 Переместить
                     </button>
