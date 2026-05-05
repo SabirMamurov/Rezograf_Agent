@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 
@@ -28,22 +29,19 @@ export default function RootLayout({
         />
       </head>
       <body className="overflow-x-hidden" suppressHydrationWarning>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var theme = localStorage.getItem('rezograf-theme');
-                  if (theme === 'dark') {
-                    document.documentElement.classList.remove('light');
-                  } else {
-                    document.documentElement.classList.add('light');
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
+        {/*
+          Theme flash prevention. Reads the saved theme from localStorage and
+          applies the `light` class on <html> BEFORE first paint, so the page
+          doesn't briefly render in the wrong theme.
+          Next.js 16 dev overlay flagged a raw <script> in a React tree —
+          per node_modules/next/dist/docs/01-app/02-guides/scripts.md the
+          right way is <Script> from next/script with an id and the
+          beforeInteractive strategy (runs before any Next.js code or
+          hydration; valid only inside root layout).
+        */}
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('rezograf-theme');if(t==='dark'){document.documentElement.classList.remove('light');}else{document.documentElement.classList.add('light');}}catch(e){}})();`}
+        </Script>
         <div className="fixed inset-0 pointer-events-none z-[-1]">
           <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/10 blur-[120px]" />
           <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-600/10 blur-[100px]" />
