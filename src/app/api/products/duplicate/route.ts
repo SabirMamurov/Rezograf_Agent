@@ -41,14 +41,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "source product not found" }, { status: 404 });
   }
 
-  // Derive filename from the source path so we keep the .btw extension.
-  // Fall back to "<name>.btw" if the source has no btwFilePath at all.
-  let fileName = `${source.name || "label"}.btw`;
-  if (source.btwFilePath) {
-    const parts = source.btwFilePath.split(/[\\/]/);
-    const last = parts[parts.length - 1];
-    if (last) fileName = last;
-  }
+  // Derive the duplicate's filename from the SOURCE PRODUCT NAME, not from
+  // the source's existing btwFilePath. Many products have a legacy mismatch
+  // between `name` and the filename portion of `btwFilePath` (renamed in
+  // the catalog without re-naming the .btw, or imported from BarTender with
+  // a generic file name). Copying the old filename verbatim — as the prior
+  // version did — meant the duplicate inherited a name that no longer
+  // matched the product, and operators had to manually fix it every time.
+  // Sanitise the name for use as a Windows-style filename: strip path
+  // separators and any embedded ".btw"/newlines/leading-trailing whitespace
+  // so the result is a clean "<name>.btw" segment.
+  const baseName = (source.name || "label")
+    .replace(/\.btw[\s\S]*$/i, "")        // drop ".btw" + anything after
+    .replace(/[\\/:*?"<>|\r\n]+/g, " ")   // strip illegal filename chars
+    .replace(/\s+/g, " ")                  // collapse whitespace
+    .trim() || "label";
+  const fileName = `${baseName}.btw`;
 
   const cleanFolder = targetFolder.replace(/^[\\/]+|[\\/]+$/g, "");
   const newBtwFilePath = cleanFolder
