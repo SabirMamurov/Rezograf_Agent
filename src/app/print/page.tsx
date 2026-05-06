@@ -310,7 +310,12 @@ export default function PrintPage() {
     const mfg = new Date(mfgDateStr + "T00:00:00");
     const months = parseShelfLifeMonths(selected?.storageCond ?? null);
     const auto = new Date(mfg);
-    auto.setMonth(auto.getMonth() + months);
+    // Treat 1 month as a fixed 30 days. The previous setMonth() approach
+    // followed the calendar (May→Sep keeps the same day-of-month), but real
+    // months are 28-31 days, so the actual elapsed time varied by ±2 days
+    // depending on which months the shelf life crossed. Operators expect
+    // "4 месяца" = exactly 120 days regardless of mfg date.
+    auto.setDate(auto.getDate() + months * 30);
     // If the operator manually overrode the use-by date, that wins; otherwise
     // we use the auto-computed one.
     const exp = expDateOverrideStr
