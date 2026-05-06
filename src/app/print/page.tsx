@@ -1343,8 +1343,18 @@ export default function PrintPage() {
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Штрихкод</label><input type="text" className="input-field" value={editForm.barcodeEan13 || ""} onChange={e => setEditForm({...editForm, barcodeEan13: e.target.value})} /></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Масса (в тексте)</label><input type="text" className="input-field" value={editForm.weight || ""} onChange={e => setEditForm({...editForm, weight: e.target.value})} /></div>
-                        <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Хранение</label><input type="text" className="input-field" value={editForm.storageCond || ""} onChange={e => setEditForm({...editForm, storageCond: e.target.value})} /></div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider" title="Печатается на этикетке (вместо массы или рядом с ней). Например: «1 шт» или «9 шт».">Количество</label>
+                          <input
+                            type="text"
+                            placeholder="напр., 1 шт"
+                            className="input-field"
+                            value={editForm.quantity || ""}
+                            onChange={e => setEditForm({ ...editForm, quantity: e.target.value })}
+                          />
+                        </div>
                       </div>
+                      <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Хранение</label><input type="text" className="input-field" value={editForm.storageCond || ""} onChange={e => setEditForm({...editForm, storageCond: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Стандарт (СТО/ГОСТ)</label><input type="text" className="input-field" value={editForm.certCode || ""} onChange={e => setEditForm({...editForm, certCode: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">КБЖУ</label><textarea className="input-field min-h-[60px]" value={editForm.nutritionalInfo || ""} onChange={e => setEditForm({...editForm, nutritionalInfo: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Состав</label><textarea className="input-field min-h-[80px]" value={editForm.composition || ""} onChange={e => setEditForm({...editForm, composition: e.target.value})} /></div>
@@ -1378,6 +1388,7 @@ export default function PrintPage() {
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Артикул{selected.sku2 ? " / Артикул 2" : ""}</span><span className="font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded tracking-widest text-[11px]">{[selected.sku, selected.sku2].filter(Boolean).join(" / ") || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Штрихкод</span><span className="font-mono text-[var(--theme-text)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] px-2 py-0.5 rounded tracking-wider text-[11px]">{selected.barcodeEan13 || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Масса</span><span className="font-semibold text-[var(--theme-text)]">{selected.weight || "—"}</span></div>
+                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs" title="Печатается на этикетке вместо или рядом с массой (например, «9 шт»)">Количество</span><span className="font-semibold text-[var(--theme-text)]">{selected.quantity || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Стандарт</span><span className="font-semibold text-[var(--theme-text)] leading-none mt-0.5">{selected.certCode || "—"}</span></div>
                       <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Срок и условия </span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.storageCond || "—"}</span></div>
                       <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Состав</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap">{selected.composition || "—"}</span></div>
