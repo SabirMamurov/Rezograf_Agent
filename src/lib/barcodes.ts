@@ -197,19 +197,29 @@ export async function generateBarcodeSvg(code: string): Promise<string> {
     includetext: true,
     textxalign: "center",
   };
+  // Per-symbology text size — bwip-js doesn't widen the viewBox to fit a
+  // larger textsize, so we have to be careful: ITF-14 (14 digits) must keep
+  // the default ~10pt or text spills past the right edge and the leftmost
+  // characters get clipped by the SVG's intrinsic overflow:hidden.
+  // EAN-13/EAN-8/Code128 have fewer characters so they tolerate +1pt.
 
+  // Taller bars improve scan reliability on the thermal printer (operators
+  // reported intermittent miss-scans on the smaller height). bwip-js
+  // `height` is in mm; SVG viewBox height grows proportionally so the
+  // bars get visually taller without changing bar widths or text size.
   switch (type) {
     case "itf14":
-      Object.assign(baseOpts, { bcid: "interleaved2of5", scale: 2, height: 14, bearers: 0 });
+      // No textsize bump — ITF-14 has 14 digits, the default barely fits.
+      Object.assign(baseOpts, { bcid: "interleaved2of5", scale: 2, height: 20, bearers: 0 });
       break;
     case "ean13":
-      Object.assign(baseOpts, { bcid: "ean13", scale: 3, height: 12 });
+      Object.assign(baseOpts, { bcid: "ean13", scale: 3, height: 17, textsize: 12 });
       break;
     case "ean8":
-      Object.assign(baseOpts, { bcid: "ean8", scale: 3, height: 12 });
+      Object.assign(baseOpts, { bcid: "ean8", scale: 3, height: 17, textsize: 12 });
       break;
     default:
-      Object.assign(baseOpts, { bcid: "code128", scale: 3, height: 12 });
+      Object.assign(baseOpts, { bcid: "code128", scale: 3, height: 17, textsize: 12 });
       break;
   }
 

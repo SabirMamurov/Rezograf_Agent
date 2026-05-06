@@ -14,7 +14,12 @@
  * skip. The constants below are calibrated for Roboto Condensed Bold with
  * letter-spacing −1 px (numeric glyphs ≈ 0.42 em wide).
  */
-const SLOT_WIDTH = 312;     // 320 − 8 px breathing room
+// The right column was reshaped: the barcode now claims 50% of the label
+// width (operators reported barcodes scanned poorly when smaller), so the
+// icons + SKU column gets the remaining ~340 px in normal mode and ~270 px
+// after an auto-grow narrow pass. SLOT_WIDTH is calibrated for the narrow
+// case so the SKU never spills past the column.
+const SLOT_WIDTH = 270;     // 280 − 10 px breathing room
 const SLOT_HEIGHT = 80;     // 84 − 4 px breathing room
 // Empirically calibrated by rendering a known SKU and measuring the resulting
 // PNG: "12468" at 88 px ≈ 269 virtual px wide → per-char ≈ 0.62 em. Numeric

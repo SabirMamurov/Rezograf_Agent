@@ -254,26 +254,34 @@ export async function POST(req: NextRequest) {
     });
 
     // ── ADAPTIVE WIDTH-PRESERVING SCALING ──
-    // Measure real content height and uniformly shrink if it overflows the
-    // physical label area. Otherwise apply only the CSS→mm base scale.
+    // Measure real content height and pick a uniform scale `s`:
+    //   • s < 1 — content overflows, shrink to fit (preserves legibility on
+    //     dense labels)
+    //   • s = 1 — content fits in roughly 85-100% of the label height
+    //   • s > 1 — significant free space at the bottom, grow text so the
+    //     customer can read it from further away (capped at MAX_GROW)
+    //
+    // The DOM-side application is identical for both directions: set
+    // inner.style.width = vw/s (narrows for grow, widens for shrink) and
+    // inner.style.transform = scale(s). For grow we do a second
+    // measurement *at the narrowed width* and clamp s, because narrower
+    // width = more text wrapping = larger scrollHeight, which could
+    // otherwise push us past the label edge.
     const vWidth = widthMm * 10;
     const vHeight = heightMm * 10;
     const BASE_SCALE = ((widthMm / 25.4) * 96) / vWidth; // ≈ 0.37795
+    const MAX_GROW = 1.25;       // never blow up text by more than 25%
+    const GROW_TRIGGER = 0.85;   // grow only if content uses < 85% of height
+    const SAFETY_MARGIN = 0.97;  // target 97% of label height after grow
 
-    const contentHeight: number = await page.evaluate((h: number) => {
-      const inner = document.querySelector(".inner") as HTMLElement;
-      return inner ? inner.scrollHeight : h;
-    }, vHeight);
-
-    if (contentHeight > vHeight) {
-      const shrink = vHeight / contentHeight;
+    const applyScaleInDom = async (s: number) => {
       await page.evaluate(
-        (s: number, bs: number, vw: number) => {
+        (sc: number, bs: number, vw: number) => {
           const inner = document.querySelector(".inner") as HTMLElement;
           const canvas = document.querySelector(".canvas") as HTMLElement;
           if (inner) {
-            inner.style.width = vw / s + "px";
-            inner.style.transform = `scale(${s})`;
+            inner.style.width = vw / sc + "px";
+            inner.style.transform = `scale(${sc})`;
             inner.style.transformOrigin = "top left";
           }
           if (canvas) {
@@ -281,11 +289,40 @@ export async function POST(req: NextRequest) {
             canvas.style.transformOrigin = "top left";
           }
         },
-        shrink,
+        s,
         BASE_SCALE,
         vWidth
       );
+    };
+
+    const measureContentHeight = (): Promise<number> =>
+      page.evaluate((h: number) => {
+        const inner = document.querySelector(".inner") as HTMLElement;
+        return inner ? inner.scrollHeight : h;
+      }, vHeight);
+
+    const contentHeight = await measureContentHeight();
+
+    if (contentHeight > vHeight) {
+      // Existing shrink-to-fit path
+      const shrink = vHeight / contentHeight;
+      await applyScaleInDom(shrink);
+    } else if (contentHeight < vHeight * GROW_TRIGGER) {
+      // Grow path: enough free space to reasonably enlarge text
+      const proposed = Math.min(MAX_GROW, (vHeight * SAFETY_MARGIN) / contentHeight);
+      // Step 1: narrow + scale (this re-wraps text and may shift heights)
+      await applyScaleInDom(proposed);
+      // Step 2: re-measure at the new width, clamp scale so the (re-wrapped)
+      // visible height never exceeds the label.
+      const reMeasured = await measureContentHeight();
+      const visible = reMeasured * proposed;
+      let finalScale = proposed;
+      if (visible > vHeight) {
+        finalScale = Math.max(1, vHeight / reMeasured);
+        await applyScaleInDom(finalScale);
+      }
     } else {
+      // Content fits naturally — no scaling, just the CSS→mm base.
       await page.evaluate((scale: number) => {
         const canvas = document.querySelector(".canvas") as HTMLElement;
         if (canvas) {
@@ -621,20 +658,38 @@ ${fontStyleBlock}
   <div class="outer">
     <div class="canvas">
       <div class="inner">
-      <!-- TOP ROW: Barcode + Icons & SKU -->
-      <div style="display: flex; justify-content: space-between; margin-bottom: 10px; margin-top: 4px;">
-        <!-- Barcode -->
-        <div style="width: 340px; height: 160px; overflow: hidden;">
-           ${barcodeSvg ? `<div style="width: 100%; height: 100%;">${barcodeSvg}</div>` : ''}
+      <!-- TOP ROW: Barcode + Icons & SKU
+           Proportional widths (flex-basis %) instead of fixed px so the row
+           stays well-formed when the auto-fit pipeline narrows the inner
+           during a grow pass. bwip-js SVGs have no width/height attrs so we
+           force them to fill via the .barcode-fill > svg CSS rule below.
+           Mirrored in components/LabelPreview.tsx. -->
+      <style>.barcode-fill > svg { width: 100% !important; height: 100% !important; display: block; }</style>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; margin-top: 4px;">
+        <!-- Barcode — locked at 50% of the label width so it dominates the
+             layout and scans reliably. The right column adapts to the
+             remaining space. 5 px top + 5 px bottom padding gives the bars
+             breathing room without resizing the row. Mirrored in
+             components/LabelPreview.tsx. -->
+        <div style="flex: 0 0 calc(50% + 4px); height: 160px; overflow: hidden; padding: 5px 0; box-sizing: border-box;">
+           ${barcodeSvg ? `<div class="barcode-fill" style="width: 100%; height: 100%;">${barcodeSvg}</div>` : ''}
         </div>
 
-        <!-- Right side: Icons + SKU -->
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 320px; height: 160px; padding-top: 2px;">
-          <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
-            <img src="${alu41Src}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
-            <img src="${eacSrc}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
-            <img src="${forkGlassSrc}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
-            <img src="${pap20Src}" style="height: 68px; width: auto; display: block; object-fit: contain;" />
+        <!-- Right side: Icons + SKU — flex:1 takes whatever the barcode's
+             fixed 50% leaves. ~340 px in normal mode, ~270 px after an
+             auto-grow narrow pass. flex-start + a small gap keeps the
+             icons and SKU close together; space-between would stretch them
+             apart now that the row is 200 px tall to fit the taller
+             barcode. -->
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 7px; flex: 1 1 0; min-width: 0; height: 160px; padding-top: 2px;">
+          <!-- Icons — width:100% + flex-end pushes them to the right edge
+               of the 320px container (previously centered with ~20px of
+               padding on each side). -->
+          <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; width: 100%; padding-left: 7px; box-sizing: border-box;">
+            <img src="${alu41Src}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
+            <img src="${eacSrc}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
+            <img src="${forkGlassSrc}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
+            <img src="${pap20Src}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
           </div>
           
           <!-- SKU(s) — adaptive size, stacks vertically when sku2 is present.

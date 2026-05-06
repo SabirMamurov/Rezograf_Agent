@@ -74,21 +74,47 @@ export default function LabelPreview({
   const V_HEIGHT = finalHeightMm * 10; // e.g. 900
   const renderScale = widthPx / V_WIDTH;
 
+  // Bidirectional auto-fit. Mirror the logic in
+  // src/app/api/render/route.ts: shrink when content overflows, GROW when
+  // there's significant free space (so customers can read text from
+  // further away). Two-pass for grow because narrowing the inner re-wraps
+  // text and the visible height after scale could otherwise overflow.
   const [shrinkScale, setShrinkScale] = useState(1);
+  const [autoFitDone, setAutoFitDone] = useState(false);
   const innerRef = React.useRef<HTMLDivElement>(null);
+  const MAX_GROW = 1.25;
+  const GROW_TRIGGER = 0.85;
+  const SAFETY_MARGIN = 0.97;
 
   React.useEffect(() => {
     setShrinkScale(1);
+    setAutoFitDone(false);
   }, [product, mfgDate, expDate]);
 
   React.useEffect(() => {
-    if (shrinkScale === 1 && innerRef.current) {
-      const scrollH = innerRef.current.scrollHeight;
-      if (scrollH > V_HEIGHT) {
-        setShrinkScale(V_HEIGHT / scrollH);
+    if (autoFitDone || !innerRef.current) return;
+    const h = innerRef.current.scrollHeight;
+    if (shrinkScale === 1) {
+      // First pass — decide direction.
+      if (h > V_HEIGHT) {
+        setShrinkScale(V_HEIGHT / h);
+        setAutoFitDone(true); // shrink path doesn't need a re-measure
+      } else if (h < V_HEIGHT * GROW_TRIGGER) {
+        const proposed = Math.min(MAX_GROW, (V_HEIGHT * SAFETY_MARGIN) / h);
+        setShrinkScale(proposed); // probe — re-measure on the next effect run
+      } else {
+        setAutoFitDone(true); // fits naturally, leave at 1
       }
+    } else {
+      // Second pass — `h` is scrollHeight at the narrowed width. Clamp the
+      // grow scale if re-wrapping pushed the visible height past the label.
+      const visible = h * shrinkScale;
+      if (visible > V_HEIGHT) {
+        setShrinkScale(Math.max(1, V_HEIGHT / h));
+      }
+      setAutoFitDone(true);
     }
-  }, [shrinkScale, product, mfgDate, expDate]);
+  }, [shrinkScale, autoFitDone, product, mfgDate, expDate]);
 
   const showComposition = !isCompositionDuplicate(product.name, product.composition);
 
@@ -251,25 +277,53 @@ export default function LabelPreview({
               shape-rendering: crispEdges !important;
             }
           `}} />
-          {/* TOP ROW: Barcode + Icons & SKU */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", marginTop: "2px" }}>
-            {/* Barcode */}
-            <div style={{ width: "340px", height: "160px" }}>
-              {barcodeSvg && <div style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />}
+          {/* TOP ROW: Barcode + Icons & SKU
+              Proportional widths (flex-basis %) instead of fixed px so the
+              row stays well-formed when the auto-fit pipeline narrows the
+              inner during a grow pass. With fixed 340/320 px children, a
+              narrowed inner (e.g. 560 px under MAX_GROW=1.25) would squish
+              both columns and the barcode SVG ended up rendering at ~88 px
+              wide. Mirrored in /api/render/route.ts. */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "6px", marginTop: "2px" }}>
+            {/* Barcode — locked at 50% of the label width so it dominates
+                the layout and scans reliably. The right column adapts to
+                the remaining space. 5 px top + 5 px bottom padding gives
+                the bars breathing room without resizing the row.
+                Mirrored in /api/render/route.ts. */}
+            <div style={{ flex: "0 0 calc(50% + 4px)", height: "160px", overflow: "hidden", padding: "5px 0", boxSizing: "border-box" }}>
+              {/*
+                bwip-js generates SVGs with only `viewBox`, no width/height
+                attrs. Without explicit dimensions, browsers default the SVG
+                to ~300×150 (CSS spec fallback) instead of filling the parent.
+                Inline `style` on the wrapping div with a child `svg`
+                selector via :global doesn't work in JSX — so we set the
+                attrs after injecting via a ref-less hack: the wrapping
+                div's CSS forces any direct svg child to fill 100%/100%.
+              */}
+              <style dangerouslySetInnerHTML={{ __html: `.barcode-fill > svg { width: 100% !important; height: 100% !important; display: block; }` }} />
+              {barcodeSvg && <div className="barcode-fill" style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />}
             </div>
 
-            {/* Right side: Icons + SKU */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", width: "320px", height: "160px", paddingTop: "2px" }}>
-              
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "center" }}>
+            {/* Right side: Icons + SKU — flex:1 takes whatever the barcode's
+                fixed 50% leaves. ~340 px in normal mode, ~270 px after an
+                auto-grow narrow pass. flex-start + a small gap keeps the
+                icons and SKU close together; space-between would stretch
+                them apart now that the row is 200 px tall to fit the
+                taller barcode. */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", gap: "7px", flex: "1 1 0", minWidth: 0, height: "160px", paddingTop: "2px" }}>
+
+              {/* Icons — width:100% + flex-end pushes them to the right edge
+                  of the 320px container (previously centered with ~20px of
+                  padding on each side). */}
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", width: "100%", paddingLeft: "7px", boxSizing: "border-box" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/alu41.png" alt="ALU 41" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/alu41.png" alt="ALU 41" style={{ height: "48px", width: "auto", display: "block", objectFit: "contain" }} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/eac.png" alt="EAC" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/eac.png" alt="EAC" style={{ height: "48px", width: "auto", display: "block", objectFit: "contain" }} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/fork_glass.png" alt="Food safe" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/fork_glass.png" alt="Food safe" style={{ height: "48px", width: "auto", display: "block", objectFit: "contain" }} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/pap20.png" alt="PAP 20" style={{ height: "68px", width: "auto", display: "block", objectFit: "contain" }} />
+                <img src="/icons/pap20.png" alt="PAP 20" style={{ height: "48px", width: "auto", display: "block", objectFit: "contain" }} />
               </div>
 
               {/* SKU(s) — adaptive size, stacks vertically when sku2 is present.
