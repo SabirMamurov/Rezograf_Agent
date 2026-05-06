@@ -28,26 +28,19 @@ export async function GET(req: NextRequest) {
   const normalizedPrefix = prefix ? prefix.replace(/\\/g, '\\') + '\\' : '';
   const searchPrefix = basePrefix + normalizedPrefix;
 
-  // Extremely fast lookup for exactly what we need
+  // Pull the full product (all scalar fields + template) so the client gets
+  // every label field — quantity, composition, sku2, boxWeight, sponsorText,
+  // manufacturer, etc. The previous explicit `select` listed only a subset
+  // and silently dropped the rest, so on a second computer (or after any
+  // edit on field outside the select) the inspector pre-filled empty for
+  // those columns even though /api/render saw correct values from the DB.
   const allProducts = await prisma.product.findMany({
     where: {
       btwFilePath: {
         startsWith: searchPrefix,
       }
     },
-    select: {
-      id: true,
-      name: true,
-      sku: true,
-      barcodeEan13: true,
-      btwFilePath: true,
-      category: true,
-      weight: true,
-      storageCond: true,
-      nutritionalInfo: true,
-      certCode: true,
-      template: true
-    }
+    include: { template: true },
   });
   
   const folders = new Set<string>();
