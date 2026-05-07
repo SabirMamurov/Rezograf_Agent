@@ -181,7 +181,10 @@ function customEan13Svg(code13: string): string {
  * - EAN-13 for 13-digit individual product codes
  * - ITF-14 for 14-digit packaging codes (prefix "2")
  */
-export async function generateBarcodeSvg(code: string): Promise<string> {
+export async function generateBarcodeSvg(
+  code: string,
+  opts: { separateText?: boolean } = {},
+): Promise<string> {
   const { code: normalizedCode, type } = normalizeBarcode(code);
 
   // EAN-13 with non-standard check digit: bwip-js refuses, hand-render instead.
@@ -192,9 +195,14 @@ export async function generateBarcodeSvg(code: string): Promise<string> {
     }
   }
 
+  // separateText=true → bwip-js draws ONLY the bars; the digits are rendered
+  // by the consumer as ordinary HTML below the SVG. Use this for ITF-14
+  // labels that get printed on the thermal head and partly worn on the
+  // warehouse — bigger HTML digits with letter-spacing are far more
+  // resilient to wear than the default tight in-SVG glyphs.
   const baseOpts: Record<string, unknown> = {
     text: normalizedCode,
-    includetext: true,
+    includetext: !opts.separateText,
     textxalign: "center",
   };
   // Per-symbology text size — bwip-js doesn't widen the viewBox to fit a

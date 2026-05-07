@@ -290,19 +290,49 @@ export default function LabelPreview({
                 the remaining space. 5 px top + 5 px bottom padding gives
                 the bars breathing room without resizing the row.
                 Mirrored in /api/render/route.ts. */}
-            <div style={{ flex: "0 0 calc(50% + 4px)", height: "160px", overflow: "hidden", padding: "5px 0", boxSizing: "border-box" }}>
-              {/*
-                bwip-js generates SVGs with only `viewBox`, no width/height
-                attrs. Without explicit dimensions, browsers default the SVG
-                to ~300×150 (CSS spec fallback) instead of filling the parent.
-                Inline `style` on the wrapping div with a child `svg`
-                selector via :global doesn't work in JSX — so we set the
-                attrs after injecting via a ref-less hack: the wrapping
-                div's CSS forces any direct svg child to fill 100%/100%.
-              */}
-              <style dangerouslySetInnerHTML={{ __html: `.barcode-fill > svg { width: 100% !important; height: 100% !important; display: block; }` }} />
-              {barcodeSvg && <div className="barcode-fill" style={{ width: "100%", height: "100%" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />}
-            </div>
+            {(() => {
+              // Test-folder + ITF-14 → digits are rendered as ordinary HTML
+              // BELOW the SVG (the SVG itself is fetched without text). The
+              // bigger letter-spaced digits survive thermal-print wear far
+              // better than the tight default bwip-js glyphs. Mirrored in
+              // /api/render/route.ts. Detection rules kept identical to the
+              // /api/barcode fetch above so SVG and HTML stay in sync.
+              const inTestFolder = !!product?.btwFilePath && /\\Тест[^\\]*\\/i.test(product.btwFilePath);
+              const digitOnly = (product?.barcodeEan13 || "").replace(/\D/g, "");
+              const isItf14 = digitOnly.length === 14;
+              const useSeparateDigits = inTestFolder && isItf14;
+              return (
+                <div style={{ flex: "0 0 calc(50% + 4px)", height: "160px", overflow: "hidden", padding: "5px 0", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: useSeparateDigits ? "4px" : 0 }}>
+                  {/*
+                    bwip-js generates SVGs with only `viewBox`, no width/height
+                    attrs. Without explicit dimensions, browsers default the SVG
+                    to ~300×150 (CSS spec fallback) instead of filling the parent.
+                    The .barcode-fill > svg CSS rule forces fill to 100%.
+                  */}
+                  <style dangerouslySetInnerHTML={{ __html: `.barcode-fill > svg { width: 100% !important; height: 100% !important; display: block; }` }} />
+                  {barcodeSvg && (
+                    <div className="barcode-fill" style={{ flex: "1 1 auto", minHeight: 0, width: "100%" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
+                  )}
+                  {useSeparateDigits && (
+                    <div style={{
+                      // Tabular-nums + bold + wide letter-spacing keeps the
+                      // digits readable even after partial thermal-print
+                      // erosion on the warehouse.
+                      fontFamily: "'Roboto Condensed', sans-serif",
+                      fontVariantNumeric: "tabular-nums",
+                      fontSize: "22px",
+                      fontWeight: 900,
+                      letterSpacing: "2.5px",
+                      textAlign: "center",
+                      lineHeight: 1,
+                      flex: "0 0 auto",
+                    }}>
+                      {digitOnly}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Right side: Icons + SKU — flex:1 takes whatever the barcode's
                 fixed 50% leaves. ~340 px in normal mode, ~270 px after an

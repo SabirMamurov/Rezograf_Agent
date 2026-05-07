@@ -186,10 +186,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
+  // Test-folder + ITF-14 → bars-only SVG; the digits are added below as
+  // plain HTML (see buildLabelHtml). Mirrored in print/page.tsx and
+  // components/LabelPreview.tsx.
+  const inTestFolder = !!product.btwFilePath && /\\Тест[^\\]*\\/i.test(product.btwFilePath);
+  const digitOnly = (product.barcodeEan13 || "").replace(/\D/g, "");
+  const isItf14 = digitOnly.length === 14;
+  const useSeparateBarcodeDigits = inTestFolder && isItf14;
+
   let barcodeSvg = "";
   if (product.barcodeEan13) {
     try {
-      barcodeSvg = await generateBarcodeSvg(product.barcodeEan13);
+      barcodeSvg = await generateBarcodeSvg(product.barcodeEan13, {
+        separateText: useSeparateBarcodeDigits,
+      });
     } catch {
       // Continue without barcode
     }
@@ -213,7 +223,8 @@ export async function POST(req: NextRequest) {
     mfgDate,
     expDate,
     iconDataUris,
-    fontCss
+    fontCss,
+    useSeparateBarcodeDigits ? digitOnly : null
   );
 
   // Viewport sized to just fit the label area (widthMm * 10 virtual px wide)
@@ -554,7 +565,11 @@ function buildLabelHtml(
   mfgDate?: string,
   expDate?: string,
   iconDataUris?: Record<string, string>,
-  embeddedFontCss?: string
+  embeddedFontCss?: string,
+  // When non-null, the SVG above contains only bars and these digits are
+  // rendered as wear-resistant HTML below the SVG (test-folder ITF-14
+  // wear-resistance experiment).
+  separateBarcodeDigits?: string | null
 ): string {
   const isCompositionDuplicate = (name: string, comp: string | null | undefined) => {
     if (!comp) return true;
@@ -670,9 +685,13 @@ ${fontStyleBlock}
              layout and scans reliably. The right column adapts to the
              remaining space. 5 px top + 5 px bottom padding gives the bars
              breathing room without resizing the row. Mirrored in
-             components/LabelPreview.tsx. -->
-        <div style="flex: 0 0 calc(50% + 4px); height: 160px; overflow: hidden; padding: 5px 0; box-sizing: border-box;">
-           ${barcodeSvg ? `<div class="barcode-fill" style="width: 100%; height: 100%;">${barcodeSvg}</div>` : ''}
+             components/LabelPreview.tsx. When separateBarcodeDigits is set
+             (test-folder ITF-14 wear-resistance experiment), the SVG holds
+             only the bars and the digits are rendered as plain HTML below
+             with bigger font + letter-spacing. -->
+        <div style="flex: 0 0 calc(50% + 4px); height: 160px; overflow: hidden; padding: 5px 0; box-sizing: border-box; display: flex; flex-direction: column;${separateBarcodeDigits ? " gap: 4px;" : ""}">
+           ${barcodeSvg ? `<div class="barcode-fill" style="flex: 1 1 auto; min-height: 0; width: 100%;">${barcodeSvg}</div>` : ''}
+           ${separateBarcodeDigits ? `<div style="font-family: 'Roboto Condensed', sans-serif; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 900; letter-spacing: 2.5px; text-align: center; line-height: 1; flex: 0 0 auto;">${escapeHtml(separateBarcodeDigits)}</div>` : ''}
         </div>
 
         <!-- Right side: Icons + SKU — flex:1 takes whatever the barcode's
