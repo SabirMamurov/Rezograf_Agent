@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeStoredBarcode } from "@/lib/barcodes";
+import { logActivity, diffProduct, summarizeDiff } from "@/lib/activity-log";
 
 // SQLite's LOWER()/LIKE are ASCII-only — they do NOT lowercase Cyrillic.
 // `LOWER('Кедровая')` returns `'Кедровая'` unchanged, so a SQL substring
@@ -123,6 +124,14 @@ export async function POST(req: NextRequest) {
       templateId: body.templateId || null,
     },
   });
+  await logActivity(req, {
+    action: "create",
+    targetType: "product",
+    targetId: product.id,
+    targetName: product.name,
+    summary: "Создал товар",
+    details: { sku: product.sku, category: product.category },
+  });
   return NextResponse.json(product, { status: 201 });
 }
 
@@ -168,10 +177,29 @@ export async function PATCH(req: NextRequest) {
     updateData.barcodeEan13 = normalizeStoredBarcode(updateData.barcodeEan13);
   }
 
+  // Read the BEFORE state so we can diff against the post-update record.
+  const before = await prisma.product.findUnique({ where: { id } });
   const product = await prisma.product.update({
     where: { id },
     data: updateData,
   });
+
+  if (before) {
+    const diff = diffProduct(
+      before as unknown as Record<string, unknown>,
+      product as unknown as Record<string, unknown>,
+    );
+    if (Object.keys(diff).length > 0) {
+      await logActivity(req, {
+        action: "edit",
+        targetType: "product",
+        targetId: product.id,
+        targetName: product.name,
+        summary: summarizeDiff(diff),
+        details: diff,
+      });
+    }
+  }
 
   return NextResponse.json(product);
 }
@@ -185,6 +213,19 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
+  // Snapshot the product before deleting so the log entry has its name
+  // (otherwise the targetName would be lost).
+  const before = await prisma.product.findUnique({ where: { id } });
   await prisma.product.delete({ where: { id } });
+  await logActivity(req, {
+    action: "delete",
+    targetType: "product",
+    targetId: id,
+    targetName: before?.name ?? null,
+    summary: "Удалил товар",
+    details: before
+      ? { sku: before.sku, category: before.category, btwFilePath: before.btwFilePath }
+      : null,
+  });
   return NextResponse.json({ success: true });
 }

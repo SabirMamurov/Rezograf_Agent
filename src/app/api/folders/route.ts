@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -83,6 +84,12 @@ export async function DELETE(req: NextRequest) {
   const normalizedPrefix = path.replace(/\\/g, '\\') + '\\';
   const searchPrefix = basePrefix + normalizedPrefix;
 
+  // Count what we're about to delete so the audit log captures the
+  // blast radius of a folder delete (it cascades all products beneath).
+  const affected = await prisma.product.count({
+    where: { btwFilePath: { startsWith: searchPrefix } },
+  });
+
   await prisma.product.deleteMany({
     where: {
       btwFilePath: {
@@ -91,5 +98,13 @@ export async function DELETE(req: NextRequest) {
     }
   });
 
+  await logActivity(req, {
+    action: "folder-delete",
+    targetType: "folder",
+    targetId: null,
+    targetName: path,
+    summary: `Удалил папку (${affected} товар(ов))`,
+    details: { folder: path, affectedProducts: affected },
+  });
   return NextResponse.json({ success: true });
 }

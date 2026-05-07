@@ -21,6 +21,40 @@ model Template {
   updatedAt   DateTime  @updatedAt
 }
 
+// Append-only audit log of mutating actions. There's no user authentication
+// in the app — operators open the LAN URL anonymously — so we identify "who
+// did it" by the client's LAN IP plus User-Agent. Good enough granularity
+// for the warehouse use case (figuring out which workstation made a wrong
+// edit). Read via GET /api/activity-log; UI lives behind the hidden
+// /changelog?activity=1 URL.
+model ActivityLog {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  ip          String?
+  userAgent   String?
+  // High-level action type: "create" | "edit" | "delete" | "duplicate"
+  // | "move" | "folder-delete". Free-form string instead of enum so we
+  // don't need a schema migration to add a new action label later.
+  action      String
+  // What was acted on: "product" or "folder".
+  targetType  String
+  // For products: the Product.id. For folders: the relative folder path
+  // ("Цех ПЦО\\Конфеты"). Nullable for actions where the target was
+  // already deleted at log time (we still keep targetName in that case).
+  targetId    String?
+  // Human-readable label of the target — product name, folder path —
+  // captured at action time so the log stays meaningful even if the
+  // target is later renamed or deleted.
+  targetName  String?
+  // Optional one-line summary in operator-friendly Russian
+  // (e.g. "Изменил название и состав").
+  summary     String?
+  // JSON dump of details: changed fields with before/after, folder
+  // contents counts, etc. Stored as text because SQLite has no JSON
+  // column type — read via JSON.parse on the way out.
+  details     String?
+}
+
 model Product {
   id              String    @id @default(uuid())
   sku             String?

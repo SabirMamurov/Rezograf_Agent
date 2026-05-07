@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activity-log";
 
 // Same Windows base prefix the rest of the app uses to address btw files.
 // Kept in sync with src/app/api/folders/route.ts and src/app/print/page.tsx.
@@ -88,5 +89,18 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  await logActivity(req, {
+    action: "duplicate",
+    targetType: "product",
+    targetId: copy.id,
+    targetName: copy.name,
+    summary: `Дублировал в папку «${cleanFolder || "Корень"}»`,
+    details: {
+      sourceId: source.id,
+      sourceName: source.name,
+      targetFolder: cleanFolder,
+      newBtwFilePath,
+    },
+  });
   return NextResponse.json(copy, { status: 201 });
 }

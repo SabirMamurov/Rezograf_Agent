@@ -1,6 +1,41 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+// Activity-log entry shape, mirroring /api/activity-log response.
+type ActivityEntry = {
+  id: string;
+  createdAt: string;
+  ip: string | null;
+  userAgent: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  targetName: string | null;
+  summary: string | null;
+  details: unknown;
+};
+
+const ACTION_LABELS: Record<string, { ru: string; cls: string }> = {
+  edit: { ru: "Изменение", cls: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+  create: { ru: "Создание", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
+  delete: { ru: "Удаление", cls: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+  duplicate: { ru: "Дублирование", cls: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" },
+  move: { ru: "Перемещение", cls: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20" },
+  "folder-delete": { ru: "Удаление папки", cls: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+  "folder-create": { ru: "Создание папки", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
+};
+
 const LOGS = [
+  {
+    version: "v1.0.31",
+    date: "7 Мая 2026",
+    title: "Скрытый журнал действий — кто и какую этикетку менял",
+    changes: [
+      { type: "feature", text: "Появился журнал действий: каждое создание, редактирование, удаление, дублирование товара и удаление папки автоматически записывается в БД с IP-адресом машины, временем, типом действия и (для редактирований) полным diff'ом — какое поле было «А», стало «B». Открывается по скрытому URL «/changelog?activity=1» — обычные операторы вкладку «Действия» в верхнем правом углу не видят. Идентификация по IP рабочей станции, без логина (как договаривались — авторизация заняла бы значительно больше времени)." },
+      { type: "ui", text: "На странице «Изменения» появились две вкладки в правом верхнем углу — «Версии» (история обновлений системы) и «Действия» (новый журнал). Вкладка «Действия» появляется ТОЛЬКО при открытии URL с параметром activity=1, в обычном режиме её не видно. Каждая запись разворачивается кликом — для редактирований показывается красный «было» и зелёный «стало» по каждому изменённому полю." }
+    ]
+  },
   {
     version: "v1.0.30",
     date: "6 Мая 2026",
@@ -309,21 +344,87 @@ const LOGS = [
 ];
 
 export default function ChangelogPage() {
+  // Activity-log tab is hidden by default. It becomes visible when the page
+  // is opened with `?activity=1` in the URL — bookmark for warehouse leads.
+  // We read the param via window.location instead of useSearchParams() to
+  // skip the Next 16 Suspense boundary requirement; this is a client page,
+  // so window is always defined inside useEffect.
+  const [showActivityTab, setShowActivityTab] = useState(false);
+  const [tab, setTab] = useState<"versions" | "activity">("versions");
+  const [activity, setActivity] = useState<ActivityEntry[] | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("activity") === "1") {
+      setShowActivityTab(true);
+      setTab("activity");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "activity" || activity !== null) return;
+    setActivityLoading(true);
+    setActivityError(null);
+    fetch("/api/activity-log?limit=300")
+      .then((r) => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then((d) => setActivity(d.entries || []))
+      .catch((err) => setActivityError(String(err)))
+      .finally(() => setActivityLoading(false));
+  }, [tab, activity]);
+
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-[var(--theme-workspace)] text-[var(--theme-text)] rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden border border-[var(--theme-border)] relative animate-fade-in">
       {/* Top Bar */}
-      <div className="flex items-center px-8 py-6 bg-[var(--color-surface-panel)]/80 backdrop-blur-xl border-b border-[var(--theme-border)] z-10 shrink-0">
+      <div className="flex items-center justify-between px-8 py-6 bg-[var(--color-surface-panel)]/80 backdrop-blur-xl border-b border-[var(--theme-border)] z-10 shrink-0">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent drop-shadow-sm">
-            История обновлений
+            {tab === "versions" ? "История обновлений" : "Журнал действий"}
           </h1>
-          <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Официальные патчноуты и новые функции системы Rezograf</p>
+          <p className="text-[13px] text-[var(--color-text-muted)] mt-1">
+            {tab === "versions"
+              ? "Официальные патчноуты и новые функции системы Rezograf"
+              : "Кто и какую этикетку менял (по IP-адресу рабочей станции)"}
+          </p>
         </div>
+        {showActivityTab && (
+          <div className="flex gap-2 bg-[var(--theme-overlay)] p-1 rounded-xl border border-[var(--theme-border)]">
+            <button
+              onClick={() => setTab("versions")}
+              className={`px-4 py-1.5 text-[12px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                tab === "versions"
+                  ? "bg-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)]"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--theme-text)]"
+              }`}
+            >
+              Версии
+            </button>
+            <button
+              onClick={() => setTab("activity")}
+              className={`px-4 py-1.5 text-[12px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                tab === "activity"
+                  ? "bg-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)]"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--theme-text)]"
+              }`}
+            >
+              Действия
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Logs Scroll Area */}
+      {tab === "activity" ? (
+        <ActivityView entries={activity} loading={activityLoading} error={activityError} />
+      ) : (
+      /* Logs Scroll Area */
       <div className="flex-1 overflow-y-auto p-8 z-10 relative">
         <div className="max-w-4xl mx-auto flex flex-col gap-8">
+
           {LOGS.map((log, index) => (
             <div key={log.version} className="relative pl-8">
               {/* Timeline dot */}
@@ -368,6 +469,98 @@ export default function ChangelogPage() {
           ))}
         </div>
       </div>
+      )}
     </div>
   );
+}
+
+function ActivityView({
+  entries,
+  loading,
+  error,
+}: {
+  entries: ActivityEntry[] | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="flex-1 overflow-y-auto p-8 z-10 relative">
+      <div className="max-w-5xl mx-auto">
+        {loading && (
+          <div className="text-center text-[var(--color-text-muted)] py-12">Загружаю журнал…</div>
+        )}
+        {error && (
+          <div className="text-center text-rose-500 py-12">Ошибка загрузки: {error}</div>
+        )}
+        {!loading && !error && entries && entries.length === 0 && (
+          <div className="text-center text-[var(--color-text-muted)] py-12">
+            Ещё нет ни одной записи. Сделайте любое изменение в каталоге и обновите страницу.
+          </div>
+        )}
+        {!loading && !error && entries && entries.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {entries.map((e) => {
+              const meta = ACTION_LABELS[e.action] || { ru: e.action, cls: "bg-[var(--theme-overlay)] text-[var(--color-text-muted)] border-[var(--theme-border)]" };
+              const ts = new Date(e.createdAt);
+              const dateStr = ts.toLocaleString("ru-RU", {
+                day: "2-digit", month: "2-digit", year: "numeric",
+                hour: "2-digit", minute: "2-digit", second: "2-digit",
+              });
+              const diff = e.action === "edit" && e.details && typeof e.details === "object"
+                ? (e.details as Record<string, { before: unknown; after: unknown }>)
+                : null;
+              return (
+                <details key={e.id} className="group glass-card p-4 cursor-pointer">
+                  <summary className="flex items-center gap-3 list-none cursor-pointer select-none">
+                    <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest rounded border ${meta.cls} shrink-0`}>
+                      {meta.ru}
+                    </span>
+                    <span className="font-mono text-[11px] text-[var(--color-text-muted)] shrink-0 tabular-nums">{dateStr}</span>
+                    <span className="font-mono text-[11px] text-indigo-500 shrink-0 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded" title={e.userAgent || undefined}>
+                      {e.ip || "—"}
+                    </span>
+                    <span className="text-[13px] text-[var(--theme-text)] truncate flex-1" title={e.targetName || ""}>
+                      <span className="font-bold">{e.targetName || "—"}</span>
+                      {e.summary && <span className="text-[var(--color-text-muted)] ml-2">· {e.summary}</span>}
+                    </span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--color-text-muted)] shrink-0 group-open:rotate-180 transition-transform"><polyline points="6 9 12 15 18 9"/></svg>
+                  </summary>
+                  {/* Diff body for edits — show before/after for each changed field */}
+                  {diff && (
+                    <div className="mt-3 pt-3 border-t border-[var(--theme-border)] flex flex-col gap-2">
+                      {Object.entries(diff).map(([field, change]) => (
+                        <div key={field} className="text-[12px] grid grid-cols-[120px_1fr] gap-3 items-start">
+                          <span className="text-[var(--color-text-muted)] uppercase tracking-wider text-[10px] font-bold pt-0.5">{field}</span>
+                          <div className="flex flex-col gap-1">
+                            <div className="bg-rose-500/5 border border-rose-500/20 px-2 py-1 rounded text-rose-500 whitespace-pre-wrap break-words font-mono text-[11px]">
+                              − {formatValue(change.before)}
+                            </div>
+                            <div className="bg-emerald-500/5 border border-emerald-500/20 px-2 py-1 rounded text-emerald-500 whitespace-pre-wrap break-words font-mono text-[11px]">
+                              + {formatValue(change.after)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Generic details payload for non-edits */}
+                  {!diff && e.details !== null && e.details !== undefined && (
+                    <pre className="mt-3 pt-3 border-t border-[var(--theme-border)] text-[11px] font-mono text-[var(--color-text-muted)] whitespace-pre-wrap break-words">
+                      {JSON.stringify(e.details, null, 2)}
+                    </pre>
+                  )}
+                </details>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "string") return v || "—";
+  return JSON.stringify(v);
 }
