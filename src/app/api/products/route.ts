@@ -36,16 +36,7 @@ export async function GET(req: NextRequest) {
     const tokens = norm(q).split(/\s+/).filter(Boolean);
     const fullQ = norm(q);
 
-    // Archived products live under "не используются\..." — operators don't
-    // want to see them in the search dropdown when picking a label to print.
-    // Folder navigation (/api/folders) and the catalog (no q) still see them
-    // so they remain accessible for cleanup / browsing.
-    const ARCHIVED_PREFIX = "C:\\Users\\Пользователь\\Desktop\\extracted_labels\\не используются\\";
-    const isArchived = (p: { btwFilePath: string | null }) =>
-      typeof p.btwFilePath === "string" && p.btwFilePath.startsWith(ARCHIVED_PREFIX);
-
     const matches = all.filter((p) => {
-      if (isArchived(p)) return false;
       const hay = [p.name, p.sku, p.sku2, p.barcodeEan13, p.category, p.btwFilePath]
         .map(norm)
         .join(" \u0001 ");
