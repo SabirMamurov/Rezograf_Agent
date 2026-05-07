@@ -186,13 +186,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  // Test-folder + ITF-14 → bars-only SVG; the digits are added below as
-  // plain HTML (see buildLabelHtml). Mirrored in print/page.tsx and
+  // ITF-14 → bars-only SVG; the digits are added below as plain HTML
+  // (see buildLabelHtml). Bigger, letter-spaced digits survive thermal
+  // wear better than the tight bwip-js glyphs. EAN-13/EAN-8/Code128
+  // keep their embedded text. Mirrored in print/page.tsx and
   // components/LabelPreview.tsx.
-  const inTestFolder = !!product.btwFilePath && /\\Тест[^\\]*\\/i.test(product.btwFilePath);
   const digitOnly = (product.barcodeEan13 || "").replace(/\D/g, "");
-  const isItf14 = digitOnly.length === 14;
-  const useSeparateBarcodeDigits = inTestFolder && isItf14;
+  const useSeparateBarcodeDigits = digitOnly.length === 14;
 
   let barcodeSvg = "";
   if (product.barcodeEan13) {

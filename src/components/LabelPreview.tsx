@@ -291,16 +291,14 @@ export default function LabelPreview({
                 the bars breathing room without resizing the row.
                 Mirrored in /api/render/route.ts. */}
             {(() => {
-              // Test-folder + ITF-14 → digits are rendered as ordinary HTML
-              // BELOW the SVG (the SVG itself is fetched without text). The
-              // bigger letter-spaced digits survive thermal-print wear far
-              // better than the tight default bwip-js glyphs. Mirrored in
-              // /api/render/route.ts. Detection rules kept identical to the
-              // /api/barcode fetch above so SVG and HTML stay in sync.
-              const inTestFolder = !!product?.btwFilePath && /\\Тест[^\\]*\\/i.test(product.btwFilePath);
+              // ITF-14 → digits rendered as ordinary HTML below the SVG
+              // (the SVG itself is fetched without text). Bigger, bolder,
+              // letter-spaced — survives thermal-print wear far better
+              // than the tight bwip-js glyphs. EAN-13/EAN-8/Code128 keep
+              // their embedded text. Mirrored in /api/render/route.ts and
+              // src/app/print/page.tsx (barcode fetch).
               const digitOnly = (product?.barcodeEan13 || "").replace(/\D/g, "");
-              const isItf14 = digitOnly.length === 14;
-              const useSeparateDigits = inTestFolder && isItf14;
+              const useSeparateDigits = digitOnly.length === 14;
               return (
                 <div style={{ flex: "0 0 calc(50% + 4px)", height: "160px", overflow: "hidden", padding: "5px 0", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: useSeparateDigits ? "4px" : 0 }}>
                   {/*

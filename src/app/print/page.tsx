@@ -406,21 +406,19 @@ export default function PrintPage() {
     }
   }, [searchActiveIdx, searchOpen]);
 
-  // Load barcode when product selected. For products in the «Тест» folder
-  // with an ITF-14 barcode we ask the API for a bars-only SVG and the
-  // LabelPreview renders the digits as separate HTML below — bigger, with
-  // letter-spacing — so they survive thermal-print wear better than the
-  // tight default bwip-js glyphs. Once the warehouse confirms the test
-  // labels scan reliably, this will be turned on for all ITF-14.
+  // Load barcode when product selected. For ITF-14 (14-digit) barcodes we
+  // ask the API for a bars-only SVG and the LabelPreview renders the
+  // digits as separate HTML below — bigger, bold, with letter-spacing —
+  // because the tight default bwip-js glyphs get rubbed off by the
+  // thermal head and the scanner misreads. EAN-13/EAN-8/Code128 keep
+  // their embedded text (the warehouse trial passed only for ITF-14).
   useEffect(() => {
     if (!selected?.barcodeEan13) {
       setBarcodeSvg("");
       return;
     }
-    const inTestFolder = !!selected.btwFilePath && /\\Тест[^\\]*\\/i.test(selected.btwFilePath);
     const digitOnly = (selected.barcodeEan13 || "").replace(/\D/g, "");
-    const isItf14 = digitOnly.length === 14;
-    const useSeparateDigits = inTestFolder && isItf14;
+    const useSeparateDigits = digitOnly.length === 14;
     const url = `/api/barcode?code=${selected.barcodeEan13}${useSeparateDigits ? "&separateText=1" : ""}`;
     fetch(url)
       .then((r) => r.text())
