@@ -72,6 +72,123 @@ export async function GET(req: NextRequest) {
   });
 }
 
+// PATCH /api/folders — move a folder (and everything under it) to another
+// place in the virtual tree. Body: { source: string, target: string }
+//   - source: relative path of the folder to move (e.g. "Цех ПЦО\\Конфеты\\Шоу-боксы\\ШБ ТУЛА")
+//   - target: relative path of the destination *parent* folder ("МП\\ПЦО"
+//             means the moved folder lands as "МП\\ПЦО\\ШБ ТУЛА"). Pass ""
+//             to move to the root.
+//
+// Mechanics: the virtual folder tree is just a derived view over
+// Product.btwFilePath. To move a folder we batch-rewrite btwFilePath of
+// every product whose path begins with the source prefix, swapping the
+// prefix for the new target prefix. The leaf segment of `source` is kept
+// (so "ШБ ТУЛА\\ШК\\foo.btw" under source "А\\B\\ШБ ТУЛА" moves to
+// target "МП\\ПЦО" as "МП\\ПЦО\\ШБ ТУЛА\\ШК\\foo.btw"). category is
+// updated to the new immediate parent.
+export async function PATCH(req: NextRequest) {
+  let body: { source?: string; target?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+  const { source, target } = body;
+  if (typeof source !== "string" || !source) {
+    return NextResponse.json({ error: "source is required" }, { status: 400 });
+  }
+  if (typeof target !== "string") {
+    return NextResponse.json({ error: "target is required (use \"\" for root)" }, { status: 400 });
+  }
+
+  const basePrefix = "C:\\Users\\Пользователь\\Desktop\\extracted_labels\\";
+  const cleanSource = source.replace(/^[\\/]+|[\\/]+$/g, "");
+  const cleanTarget = target.replace(/^[\\/]+|[\\/]+$/g, "");
+  const sourceLeaf = cleanSource.split(/[\\/]/).pop() || "";
+
+  if (!sourceLeaf) {
+    return NextResponse.json({ error: "source must be a folder path" }, { status: 400 });
+  }
+  // Forbid no-ops and self-moves into a child of source — would create a
+  // loop in the prefix rewrite (target prefix would itself contain source).
+  if (cleanSource === cleanTarget) {
+    return NextResponse.json({ error: "source equals target" }, { status: 400 });
+  }
+  if (cleanTarget.toLowerCase().startsWith(cleanSource.toLowerCase() + "\\")) {
+    return NextResponse.json({ error: "cannot move a folder into its own descendant" }, { status: 400 });
+  }
+  // Forbid moving a folder onto a path that already contains a same-named
+  // child — silently merging would risk filename collisions and
+  // surprise the operator.
+  const newFolderPath = cleanTarget ? `${cleanTarget}\\${sourceLeaf}` : sourceLeaf;
+  if (cleanSource.toLowerCase() === newFolderPath.toLowerCase()) {
+    return NextResponse.json({ error: "destination equals source" }, { status: 400 });
+  }
+  const collisionPrefix = basePrefix + newFolderPath + "\\";
+  const collisions = await prisma.product.count({
+    where: { btwFilePath: { startsWith: collisionPrefix } },
+  });
+  if (collisions > 0) {
+    return NextResponse.json(
+      { error: `Папка «${sourceLeaf}» уже существует в «${cleanTarget || "Корне"}» (${collisions} товар(ов)). Переименуйте или удалите её перед переносом.` },
+      { status: 409 },
+    );
+  }
+
+  const oldPrefix = basePrefix + cleanSource + "\\";
+  const newPrefix = basePrefix + newFolderPath + "\\";
+
+  // Read affected products so we can rewrite btwFilePath one by one (SQLite
+  // doesn't support REPLACE-in-place via Prisma updateMany).
+  const affected = await prisma.product.findMany({
+    where: { btwFilePath: { startsWith: oldPrefix } },
+    select: { id: true, btwFilePath: true },
+  });
+
+  if (affected.length === 0) {
+    return NextResponse.json(
+      { error: `Папка «${cleanSource}» пуста или не существует` },
+      { status: 404 },
+    );
+  }
+
+  await prisma.$transaction(
+    affected.map((p) => {
+      const rewritten = newPrefix + (p.btwFilePath || "").slice(oldPrefix.length);
+      // Recompute category (immediate-parent folder leaf) so the catalog
+      // filter and the inspector "Категория" badge stay in sync.
+      const rel = rewritten.slice(basePrefix.length);
+      const segs = rel.split(/[\\/]/);
+      segs.pop(); // drop filename
+      const newCategory = segs.length > 0 ? segs[segs.length - 1] : null;
+      return prisma.product.update({
+        where: { id: p.id },
+        data: { btwFilePath: rewritten, category: newCategory },
+      });
+    }),
+  );
+
+  await logActivity(req, {
+    action: "move",
+    targetType: "folder",
+    targetId: null,
+    targetName: cleanSource,
+    summary: `Перенёс папку в «${cleanTarget || "Корень"}» (${affected.length} товар(ов))`,
+    details: {
+      source: cleanSource,
+      target: cleanTarget,
+      newFolderPath,
+      affectedProducts: affected.length,
+    },
+  });
+
+  return NextResponse.json({
+    success: true,
+    moved: affected.length,
+    newFolderPath,
+  });
+}
+
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const path = searchParams.get("path");

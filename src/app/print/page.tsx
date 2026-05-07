@@ -280,6 +280,13 @@ export default function PrintPage() {
   const [duplicateSearchQuery, setDuplicateSearchQuery] = useState("");
   const [duplicatingItem, setDuplicatingItem] = useState(false);
 
+  // Move-folder state — relocates the *entire* current folder (with all its
+  // products and subfolders) under a different parent. Distinct from
+  // isMovingFile (which moves a single product). Backend: PATCH /api/folders.
+  const [isMovingFolder, setIsMovingFolder] = useState(false);
+  const [moveFolderSearchQuery, setMoveFolderSearchQuery] = useState("");
+  const [movingFolderInProgress, setMovingFolderInProgress] = useState(false);
+
   const basePrefix = 'C:\\Users\\Пользователь\\Desktop\\extracted_labels\\';
 
   // Derive the FULL hierarchical folder path of a product from its
@@ -901,7 +908,7 @@ export default function PrintPage() {
         method: "DELETE"
       });
       if (!res.ok) throw new Error("Failed to delete folder");
-      
+
       setToast({ message: "Папка успешно удалена", type: "success" });
       const parts = currentPath.split(/[/\\]/).filter(Boolean);
       parts.pop();
@@ -911,6 +918,51 @@ export default function PrintPage() {
       setToast({ message: "Ошибка удаления папки", type: "error" });
     } finally {
       setDeletingItem(false);
+    }
+  };
+
+  const openMoveFolderModal = async () => {
+    if (!currentPath) return;
+    setIsMovingFolder(true);
+    setMoveFolderSearchQuery("");
+    setAllFoldersList([]);
+    try {
+      const res = await fetch("/api/folders?fetchAllPaths=true");
+      if (res.ok) {
+        const data = await res.json();
+        setAllFoldersList(data.folders || []);
+      }
+    } catch {
+      setToast({ message: "Ошибка загрузки папок", type: "error" });
+    }
+  };
+
+  const handleMoveCurrentFolder = async (target: string) => {
+    if (!currentPath) return;
+    setMovingFolderInProgress(true);
+    try {
+      const res = await fetch("/api/folders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: currentPath, target }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to move folder");
+      }
+      setToast({
+        message: `Папка перенесена (${data.moved} товар${data.moved === 1 ? "" : "ов"})`,
+        type: "success",
+      });
+      setIsMovingFolder(false);
+      // Navigate to the new location so the operator immediately sees the
+      // moved folder under its new parent.
+      setCurrentPath(data.newFolderPath || target);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Ошибка переноса папки";
+      setToast({ message: msg, type: "error" });
+    } finally {
+      setMovingFolderInProgress(false);
     }
   };
 
@@ -1540,9 +1592,14 @@ export default function PrintPage() {
                 Вы можете выбрать нужный артикул слева или удалить текущую открытую папку вместе со всем её содержимым.
               </p>
               {currentPath !== "" && (
-                 <button onClick={handleDeleteFolder} disabled={deletingItem} className="py-2.5 px-4 shadow-[0_4px_15px_rgba(239,68,68,0.1)] text-[11px] font-bold uppercase tracking-wide bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50">
-                    🗑️ {deletingItem ? "Удаление..." : "Удалить текущую папку"}
-                 </button>
+                <div className="flex gap-2">
+                  <button onClick={openMoveFolderModal} className="py-2.5 px-4 shadow-[0_4px_15px_rgba(99,102,241,0.1)] text-[11px] font-bold uppercase tracking-wide bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-2">
+                    📦 Переместить папку
+                  </button>
+                  <button onClick={handleDeleteFolder} disabled={deletingItem} className="py-2.5 px-4 shadow-[0_4px_15px_rgba(239,68,68,0.1)] text-[11px] font-bold uppercase tracking-wide bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50">
+                     🗑️ {deletingItem ? "Удаление..." : "Удалить текущую папку"}
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -1756,6 +1813,63 @@ export default function PrintPage() {
 
             <div className="flex justify-end pt-2">
               <button onClick={() => setIsDuplicatingFile(false)} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOVE FOLDER MODAL — relocates the entire current folder (with all
+          its products and subfolders) under a different parent. The list
+          excludes the source itself and any descendant of the source so
+          the operator can't accidentally create a loop. */}
+      {isMovingFolder && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsMovingFolder(false)}>
+          <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 w-[500px] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-[var(--theme-text)] mb-1">Переместить папку</h2>
+            <div className="text-sm text-[var(--theme-text-muted)] mb-1">Куда перенести</div>
+            <div className="text-sm font-semibold text-indigo-500 mb-4 truncate" title={currentPath}>📁 {currentPath}</div>
+
+            <input
+              type="text"
+              className="input-field w-full mb-4"
+              placeholder="Поиск папки-приёмника..."
+              value={moveFolderSearchQuery}
+              onChange={e => setMoveFolderSearchQuery(e.target.value)}
+              autoFocus
+            />
+
+            <div className="flex-1 overflow-y-auto min-h-[50px] bg-[var(--theme-overlay)] border border-[var(--theme-border)] rounded-xl py-2 px-1 mb-4 custom-scrollbar">
+              <button
+                className="w-full text-left px-4 py-3 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer border-b border-transparent hover:border-[var(--theme-border)] font-bold mb-1 disabled:opacity-50"
+                onClick={() => handleMoveCurrentFolder("")}
+                disabled={movingFolderInProgress}
+              >
+                🏠 Корневая директория (без папки)
+              </button>
+
+              {allFoldersList
+                .filter((f) => {
+                  // Hide the source itself + any descendant (would create a loop)
+                  const lower = f.toLowerCase();
+                  const srcLower = currentPath.toLowerCase();
+                  if (lower === srcLower) return false;
+                  if (lower.startsWith(srcLower + "\\")) return false;
+                  return f.toLowerCase().includes(moveFolderSearchQuery.toLowerCase());
+                })
+                .map((f) => (
+                  <button
+                    key={f}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer text-[var(--theme-text)] disabled:opacity-50"
+                    onClick={() => handleMoveCurrentFolder(f)}
+                    disabled={movingFolderInProgress}
+                  >
+                    📁 {f}
+                  </button>
+                ))}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button onClick={() => setIsMovingFolder(false)} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
             </div>
           </div>
         </div>
