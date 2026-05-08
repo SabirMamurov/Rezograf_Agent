@@ -266,6 +266,17 @@ export default function PrintPage() {
   const [createForm, setCreateForm] = useState<Partial<Product>>({});
   const [creatingItem, setCreatingItem] = useState(false);
   const [deletingItem, setDeletingItem] = useState(false);
+  // Confirmation modal for irreversible deletes (label + folder).
+  // Opening: any "Delete X" button sets this; the actual API call only fires
+  // when the operator clicks the red "Удалить" inside the modal. null = no
+  // modal open. The whole shape is captured at open time so the modal stays
+  // semantically tied to the click that opened it.
+  const [confirmDelete, setConfirmDelete] = useState<{
+    kind: "file" | "folder";
+    title: string;
+    subtitle?: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   // Move state
   const [isMovingFile, setIsMovingFile] = useState(false);
@@ -1290,7 +1301,21 @@ export default function PrintPage() {
                     <button onClick={openDuplicateFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-cyan-500/20 cursor-pointer flex items-center justify-center gap-1.5">
                       📋 Дублировать
                     </button>
-                    <button onClick={handleDeleteFile} disabled={deletingItem} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50">
+                    <button
+                      onClick={() => {
+                        if (!selected) return;
+                        setConfirmDelete({
+                          kind: "file",
+                          title: selected.name || "(без названия)",
+                          subtitle: selected.btwFilePath
+                            ? `Файл: ${selected.btwFilePath.split(/[\\/]/).pop()}`
+                            : undefined,
+                          onConfirm: handleDeleteFile,
+                        });
+                      }}
+                      disabled={deletingItem}
+                      className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
                       🗑️ Удалить
                     </button>
                     <button onClick={startEdit} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
@@ -1604,7 +1629,19 @@ export default function PrintPage() {
                   <button onClick={openMoveFolderModal} className="py-2.5 px-4 shadow-[0_4px_15px_rgba(99,102,241,0.1)] text-[11px] font-bold uppercase tracking-wide bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-2">
                     📦 Переместить папку
                   </button>
-                  <button onClick={handleDeleteFolder} disabled={deletingItem} className="py-2.5 px-4 shadow-[0_4px_15px_rgba(239,68,68,0.1)] text-[11px] font-bold uppercase tracking-wide bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50">
+                  <button
+                    onClick={() => {
+                      if (!currentPath) return;
+                      setConfirmDelete({
+                        kind: "folder",
+                        title: currentPath,
+                        subtitle: "Удалятся ВСЕ этикетки внутри этой папки и её подпапок (без возможности восстановить).",
+                        onConfirm: handleDeleteFolder,
+                      });
+                    }}
+                    disabled={deletingItem}
+                    className="py-2.5 px-4 shadow-[0_4px_15px_rgba(239,68,68,0.1)] text-[11px] font-bold uppercase tracking-wide bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                  >
                      🗑️ {deletingItem ? "Удаление..." : "Удалить текущую папку"}
                   </button>
                 </div>
@@ -1821,6 +1858,61 @@ export default function PrintPage() {
 
             <div className="flex justify-end pt-2">
               <button onClick={() => setIsDuplicatingFile(false)} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL — guards both the per-label and per-folder
+          delete buttons. Operators reported accidental deletes (and one
+          phantom-delete scare with «ШБ ТУЛА») — the modal forces a second,
+          intentional click before the API fires. Backdrop or Esc closes
+          without deleting. */}
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setConfirmDelete(null)}
+        >
+          <div
+            className="bg-[var(--color-surface-panel)] border-2 border-red-500/40 rounded-2xl shadow-[0_20px_60px_rgba(239,68,68,0.3)] p-6 w-[480px] max-w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">⚠️</span>
+              <h2 className="text-lg font-bold text-[var(--theme-text)]">
+                Удалить {confirmDelete.kind === "file" ? "этикетку" : "папку"}?
+              </h2>
+            </div>
+            <p className="text-xs text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Точно удалить:</p>
+            <div className="bg-red-500/5 border border-red-500/30 rounded-lg p-3 mb-3 text-[var(--theme-text)] font-bold break-words text-sm leading-snug">
+              {confirmDelete.title}
+            </div>
+            {confirmDelete.subtitle && (
+              <p className="text-xs text-[var(--theme-text-muted)] mb-3 leading-relaxed">{confirmDelete.subtitle}</p>
+            )}
+            <p className="text-xs text-rose-500 font-semibold mb-5 flex items-center gap-1.5">
+              <span>⚠</span>
+              <span>Действие необратимо. Восстановить можно только из бэкапа БД.</span>
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deletingItem}
+                className="px-5 py-2 text-sm font-bold tracking-wide text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-overlay)] border border-[var(--theme-border)] rounded-lg transition-all cursor-pointer disabled:opacity-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={async () => {
+                  const fn = confirmDelete.onConfirm;
+                  setConfirmDelete(null);
+                  await fn();
+                }}
+                disabled={deletingItem}
+                className="px-5 py-2 text-sm font-bold uppercase tracking-wider bg-red-500 text-white hover:bg-red-600 border-2 border-red-500 rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                🗑️ Да, удалить
+              </button>
             </div>
           </div>
         </div>
