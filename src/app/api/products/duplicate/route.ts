@@ -42,22 +42,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "source product not found" }, { status: 404 });
   }
 
-  // Derive the duplicate's filename from the SOURCE PRODUCT NAME, not from
-  // the source's existing btwFilePath. Many products have a legacy mismatch
-  // between `name` and the filename portion of `btwFilePath` (renamed in
-  // the catalog without re-naming the .btw, or imported from BarTender with
-  // a generic file name). Copying the old filename verbatim — as the prior
-  // version did — meant the duplicate inherited a name that no longer
-  // matched the product, and operators had to manually fix it every time.
-  // Sanitise the name for use as a Windows-style filename: strip path
-  // separators and any embedded ".btw"/newlines/leading-trailing whitespace
-  // so the result is a clean "<name>.btw" segment.
-  const baseName = (source.name || "label")
-    .replace(/\.btw[\s\S]*$/i, "")        // drop ".btw" + anything after
-    .replace(/[\\/:*?"<>|\r\n]+/g, " ")   // strip illegal filename chars
-    .replace(/\s+/g, " ")                  // collapse whitespace
-    .trim() || "label";
-  const fileName = `${baseName}.btw`;
+  // Preserve the source product's filename EXACTLY (last segment of
+  // btwFilePath). Operators intentionally keep two distinct fields:
+  //   - `name` — what's printed on the label
+  //   - filename in `btwFilePath` — what they see in the file list
+  // These differ on purpose (e.g. name «Кедровый грильяж в шоколаде» vs
+  // filename «Кедровый грильяж, шоколад 4 шт.btw»). The previous version
+  // overwrote the filename with a sanitized `name` on every duplicate,
+  // forcing operators to retype the proper file name afterwards.
+  //
+  // Sanitization is still applied (strip `\`/`/` so a dirty source path
+  // can't propagate phantom subfolders into the new copy — see the
+  // companion guard in saveEdit on the client). If the source has no
+  // btwFilePath at all, fall back to «<name>.btw».
+  let fileName: string;
+  if (source.btwFilePath) {
+    const parts = source.btwFilePath.split(/[\\/]/);
+    const last = parts[parts.length - 1] || "";
+    fileName = last.replace(/[\\/:*?"<>|\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  } else {
+    fileName = "";
+  }
+  if (!fileName) {
+    const baseName = (source.name || "label")
+      .replace(/[\\/:*?"<>|\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "label";
+    fileName = `${baseName}.btw`;
+  }
 
   const cleanFolder = targetFolder.replace(/^[\\/]+|[\\/]+$/g, "");
   const newBtwFilePath = cleanFolder
