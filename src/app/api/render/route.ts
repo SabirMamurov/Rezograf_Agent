@@ -753,6 +753,15 @@ ${fontStyleBlock}
       </div>
       ` : ''}
 
+      <!-- Extra text (seasonal markers, marketplace tags, BIO certs, etc.).
+           Sits between composition and quantity/weight, centered, italic-ish.
+           Keep layout aligned with src/components/LabelPreview.tsx. -->
+      ${product.extraText ? `
+      <div style="font-size: 22px; font-weight: 700; font-style: italic; text-align: center; margin-bottom: 4px; line-height: 1.15;">
+        ${escapeHtml(product.extraText)}
+      </div>
+      ` : ''}
+
       <!-- Sponsor Text -->
       ${product.sponsorText ? `
       <div style="font-size: 24px; font-weight: 900; text-align: center; margin-bottom: 8px; text-decoration: underline;">

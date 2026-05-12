@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
       quantity: source.quantity,
       boxWeight: source.boxWeight,
       sponsorText: source.sponsorText,
+      extraText: source.extraText,
       templateId: source.templateId,
     },
   });

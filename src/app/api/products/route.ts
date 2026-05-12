@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
       quantity: body.quantity || null,
       boxWeight: body.boxWeight || null,
       sponsorText: body.sponsorText || null,
+      extraText: body.extraText || null,
       templateId: body.templateId || null,
     },
   });
@@ -170,7 +171,8 @@ export async function PATCH(req: NextRequest) {
     "certCode",
     "quantity",
     "boxWeight",
-    "sponsorText"
+    "sponsorText",
+    "extraText",
   ];
 
   const updateData: Record<string, string | null> = {};

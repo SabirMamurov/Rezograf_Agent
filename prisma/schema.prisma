@@ -73,6 +73,13 @@ model Product {
   quantity        String?
   boxWeight       String?
   sponsorText     String?
+  // Free-form extra label text that doesn't fit the existing field schema —
+  // seasonal markers ("Обечайка 8 Марта"), marketplace tags ("OZON",
+  // "ВкусВилл"), BIO certs ("RU-BIO-112"), country-of-origin labels, brand
+  // variants ("Брикет", "Шишка малая"), promo flags. Rendered on the label
+  // between the title block and the quantity/weight block. Populated from
+  // BarTender extractions (script: scripts/migrate_extra_text.js).
+  extraText       String?
 
   templateId String?
   template   Template? @relation(fields: [templateId], references: [id])

@@ -16,6 +16,7 @@ interface Product {
   quantity?: string | null;
   boxWeight?: string | null;
   sponsorText?: string | null;
+  extraText?: string | null;
   btwFilePath?: string | null;
 }
 
@@ -428,6 +429,14 @@ export default function LabelPreview({
           {showComposition && (
             <div style={{ fontSize: "24px", fontWeight: 700, lineHeight: "1.2", textAlign: "left", marginBottom: "3px" }}>
               {product.composition}
+            </div>
+          )}
+
+          {/* ── Extra text (seasonal markers / marketplace / BIO / etc.) ──
+              Keep aligned with src/app/api/render/route.ts. */}
+          {product.extraText && (
+            <div style={{ fontSize: "22px", fontWeight: 700, fontStyle: "italic", textAlign: "center", marginBottom: "4px", lineHeight: "1.15" }}>
+              {product.extraText}
             </div>
           )}
 

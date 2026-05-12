@@ -52,6 +52,7 @@ interface Product {
   quantity: string | null;
   boxWeight: string | null;
   sponsorText: string | null;
+  extraText: string | null;
   manufacturer: string | null;
   updatedAt?: string;
   template?: {
@@ -1463,6 +1464,7 @@ export default function PrintPage() {
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Стандарт (СТО/ГОСТ)</label><input type="text" className="input-field" value={editForm.certCode || ""} onChange={e => setEditForm({...editForm, certCode: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">КБЖУ</label><textarea className="input-field min-h-[60px]" value={editForm.nutritionalInfo || ""} onChange={e => setEditForm({...editForm, nutritionalInfo: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Состав</label><textarea className="input-field min-h-[80px]" value={editForm.composition || ""} onChange={e => setEditForm({...editForm, composition: e.target.value})} /></div>
+                      <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Доп. текст <span className="text-[10px] font-normal opacity-60">(обечайка, маркетплейс, БИО и т.п.)</span></label><input type="text" className="input-field" value={editForm.extraText || ""} onChange={e => setEditForm({...editForm, extraText: e.target.value})} placeholder="напр. Обечайка 8 Марта, OZON, RU-BIO-112" /></div>
                     </>
                   ) : (
                     <>
@@ -1497,6 +1499,7 @@ export default function PrintPage() {
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Стандарт</span><span className="font-semibold text-[var(--theme-text)] leading-none mt-0.5">{selected.certCode || "—"}</span></div>
                       <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Срок и условия </span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.storageCond || "—"}</span></div>
                       <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Состав</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap">{selected.composition || "—"}</span></div>
+                      <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Доп. текст</span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] italic">{selected.extraText || "—"}</span></div>
                       <div className="flex flex-col pb-1 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">КБЖУ</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.nutritionalInfo || "—"}</span></div>
                     </>
                   )}
@@ -1757,6 +1760,11 @@ export default function PrintPage() {
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Состав</label>
                   <textarea className="input-field w-full min-h-[80px]" placeholder="Ингредиенты..." value={createForm.composition || ""} onChange={e => setCreateForm({...createForm, composition: e.target.value})} />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Доп. текст <span className="text-[10px] font-normal opacity-60">(обечайка / маркетплейс / БИО)</span></label>
+                  <input type="text" className="input-field w-full" placeholder="напр. Обечайка 8 Марта, OZON, RU-BIO-112" value={createForm.extraText || ""} onChange={e => setCreateForm({...createForm, extraText: e.target.value})} />
                 </div>
               </div>
             </div>

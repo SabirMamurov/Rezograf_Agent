@@ -40,6 +40,7 @@ export async function PUT(
       quantity: body.quantity !== undefined ? body.quantity : undefined,
       boxWeight: body.boxWeight !== undefined ? body.boxWeight : undefined,
       sponsorText: body.sponsorText !== undefined ? body.sponsorText : undefined,
+      extraText: body.extraText !== undefined ? body.extraText : undefined,
       templateId: body.templateId ?? undefined,
     },
   });
