@@ -679,11 +679,18 @@ export default function PrintPage() {
       // up to and including the last separator and append the new file name.
       // If the file name is empty, leave btwFilePath alone (don't accidentally
       // detach the product from the folder tree).
+      //
+      // CRITICAL: strip path separators (\ and /) from the user-entered file
+      // name BEFORE concatenating with the parent path — otherwise a slash
+      // in the name turns into a folder boundary, splits the file into
+      // nested folders and the operator sees their label "disappear" into
+      // a phantom subfolder. Same rule as in handleCreateLabel.
       const payload: Record<string, unknown> = { id: selected.id, ...editForm };
-      if (selected.btwFilePath && editFileName.trim()) {
+      const safeFileName = editFileName.trim().replace(/[\\/]/g, " ").replace(/\s+/g, " ").trim();
+      if (selected.btwFilePath && safeFileName) {
         const parts = selected.btwFilePath.split(/[\\/]/);
         const parent = parts.slice(0, -1).join("\\");
-        payload.btwFilePath = parent ? `${parent}\\${editFileName.trim()}` : editFileName.trim();
+        payload.btwFilePath = parent ? `${parent}\\${safeFileName}` : safeFileName;
       }
       const res = await fetch(`/api/products`, {
         method: "PATCH",
@@ -857,6 +864,14 @@ export default function PrintPage() {
       handleSelect(created);
       setIsEditing(true);
       setEditForm(created);
+      // Pre-fill the file-name input from the new copy's btwFilePath. Without
+      // this the field keeps the previously-selected product's filename (or
+      // is empty) — operators kept thinking the duplicate inherited the wrong
+      // file name. Mirrors the same extraction startEdit() does.
+      const lastSegment = created.btwFilePath
+        ? created.btwFilePath.split(/[\\/]/).pop() || ""
+        : "";
+      setEditFileName(lastSegment);
     } catch (err) {
       setToast({ message: "Ошибка дублирования", type: "error" });
     } finally {
