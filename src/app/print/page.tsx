@@ -653,6 +653,12 @@ export default function PrintPage() {
 
   const startEdit = () => {
     if (!selected) return;
+    // Pre-fill EVERY label-data field, not just the 8 we used historically.
+    // Without `quantity`/`certCode`/`boxWeight`/`sponsorText`/`manufacturer`,
+    // those inputs opened blank even when the underlying product had data —
+    // operators thought the data was gone and re-typed it from scratch (the
+    // PATCH endpoint just-omits-unsent-fields so they weren't actually lost,
+    // but the experience was broken).
     setEditForm({
       name: selected.name,
       sku: selected.sku || "",
@@ -662,6 +668,12 @@ export default function PrintPage() {
       nutritionalInfo: selected.nutritionalInfo || "",
       storageCond: selected.storageCond || "",
       composition: selected.composition || "",
+      quantity: selected.quantity || "",
+      certCode: selected.certCode || "",
+      boxWeight: selected.boxWeight || "",
+      sponsorText: selected.sponsorText || "",
+      manufacturer: selected.manufacturer || "",
+      extraText: selected.extraText || "",
     });
     // Pull the file name (last segment) out of btwFilePath so the user
     // can rename the .btw file without manipulating the full Windows path.
