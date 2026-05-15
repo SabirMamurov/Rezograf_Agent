@@ -505,12 +505,14 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Diagonal hatch via background-clip:text. Every visible pixel is
-       pure black so it survives Sharp.threshold(120) binarization for
-       the thermal printer; rgba(0,0,0,0.18) gives luminance ~209 → wiped
-       to white by threshold and watermark disappeared on print. */
+    /* Halftone dot pattern via background-clip:text. Each dot is pure
+       black so it survives Sharp.threshold(120) binarization for the
+       thermal printer (rgba(0,0,0,0.18) at luminance ~209 was wiped by
+       threshold and the watermark vanished on print). Sparse dots read
+       as a soft gray "stamp" but don't smear into the body text the way
+       diagonal stripes did. */
     color: transparent;
-    background: repeating-linear-gradient(45deg, #000 0 3px, transparent 3px 11px);
+    background: radial-gradient(circle, #000 0 1.5px, transparent 2px) 0 0 / 7px 7px;
     -webkit-background-clip: text;
     background-clip: text;
     line-height: 0.85;
@@ -692,12 +694,14 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Diagonal hatch via background-clip:text. Every visible pixel is
-       pure black so it survives Sharp.threshold(120) binarization for
-       the thermal printer; rgba(0,0,0,0.18) gives luminance ~209 → wiped
-       to white by threshold and watermark disappeared on print. */
+    /* Halftone dot pattern via background-clip:text. Each dot is pure
+       black so it survives Sharp.threshold(120) binarization for the
+       thermal printer (rgba(0,0,0,0.18) at luminance ~209 was wiped by
+       threshold and the watermark vanished on print). Sparse dots read
+       as a soft gray "stamp" but don't smear into the body text the way
+       diagonal stripes did. */
     color: transparent;
-    background: repeating-linear-gradient(45deg, #000 0 3px, transparent 3px 11px);
+    background: radial-gradient(circle, #000 0 1.5px, transparent 2px) 0 0 / 7px 7px;
     -webkit-background-clip: text;
     background-clip: text;
     line-height: 0.85;
