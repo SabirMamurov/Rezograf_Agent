@@ -501,7 +501,10 @@ ${fontStyleBlock}
     justify-content: center;
     font-family: 'Roboto Condensed', sans-serif;
     font-weight: 700;
-    font-size: 800px;
+    /* "МП" is two glyphs (was single "Э" at 800px) — reduce so the
+       watermark fits horizontally within the label width. */
+    font-size: 500px;
+    letter-spacing: -20px;
     color: rgba(0, 0, 0, 0.18);
     line-height: 0.85;
     pointer-events: none;
@@ -555,7 +558,7 @@ ${fontStyleBlock}
 <body>
   <div class="outer">
     <div class="canvas">
-      ${isExport ? `<div class="export-mark">Э</div>` : ""}
+      ${isExport ? `<div class="export-mark">МП</div>` : ""}
       <div class="inner">
         <div class="shk-title">${escapeHtml(title)}</div>
         ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
@@ -678,7 +681,10 @@ ${fontStyleBlock}
     justify-content: center;
     font-family: 'Roboto Condensed', sans-serif;
     font-weight: 700;
-    font-size: 800px;
+    /* "МП" is two glyphs (was single "Э" at 800px) — reduce so the
+       watermark fits horizontally within the label width. */
+    font-size: 500px;
+    letter-spacing: -20px;
     color: rgba(0, 0, 0, 0.18);
     line-height: 0.85;
     pointer-events: none;
@@ -709,7 +715,7 @@ ${fontStyleBlock}
 <body>
   <div class="outer">
     <div class="canvas">
-      ${product?.isExport ? `<div class="export-mark">Э</div>` : ""}
+      ${product?.isExport ? `<div class="export-mark">МП</div>` : ""}
       <div class="inner">
       <!-- TOP ROW: Barcode + Icons & SKU
            Proportional widths (flex-basis %) instead of fixed px so the row

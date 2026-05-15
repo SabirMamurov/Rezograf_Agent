@@ -174,7 +174,10 @@ export default function LabelPreview({
                 justifyContent: "center",
                 fontFamily: "'Roboto Condensed', sans-serif",
                 fontWeight: 700,
-                fontSize: "800px",
+                // "МП" is two glyphs (was single "Э" at 800px) — reduced
+                // so the watermark fits horizontally within label width.
+                fontSize: "500px",
+                letterSpacing: "-20px",
                 color: "rgba(0,0,0,0.18)",
                 lineHeight: 0.85,
                 pointerEvents: "none",
@@ -182,7 +185,7 @@ export default function LabelPreview({
                 zIndex: 0,
               }}
             >
-              Э
+              МП
             </div>
           )}
           <div
@@ -282,7 +285,10 @@ export default function LabelPreview({
               justifyContent: "center",
               fontFamily: "'Roboto Condensed', sans-serif",
               fontWeight: 700,
-              fontSize: "800px",
+              // "МП" is two glyphs (was single "Э" at 800px) — reduced
+              // so the watermark fits horizontally within label width.
+              fontSize: "500px",
+              letterSpacing: "-20px",
               color: "rgba(0,0,0,0.18)",
               lineHeight: 0.85,
               pointerEvents: "none",
@@ -290,7 +296,7 @@ export default function LabelPreview({
               zIndex: 0,
             }}
           >
-            Э
+            МП
           </div>
         )}
         <div
