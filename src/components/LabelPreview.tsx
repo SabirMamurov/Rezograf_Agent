@@ -185,7 +185,7 @@ export default function LabelPreview({
                 // the label (default flex centering visually leans right).
                 color: "transparent",
                 background:
-                  "radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px",
+                  "radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px",
                 WebkitBackgroundClip: "text",
                 backgroundClip: "text",
                 transform: "translateX(-2px)",
@@ -306,7 +306,7 @@ export default function LabelPreview({
               // the label (default flex centering visually leans right).
               color: "transparent",
               background:
-                "radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px",
+                "radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px",
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
               transform: "translateX(-2px)",

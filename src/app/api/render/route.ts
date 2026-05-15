@@ -505,13 +505,16 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Fine halftone via background-clip:text. Each dot is pure black so
-       it survives Sharp.threshold(120) binarization for the thermal
-       printer (rgba(0,0,0,0.18) at luminance ~209 was wiped to white).
-       3px tile is below the eye's resolving distance at ~30cm so the
-       dots blur into a uniform gray fill, like solid translucent letters. */
+    /* Halftone via background-clip:text. Each dot is pure black so it
+       survives Sharp.threshold(120) binarization for the thermal printer
+       (rgba(0,0,0,0.18) at luminance ~209 was wiped to white). 1px solid
+       dot with sharp 0.2px edge on a 4px tile gives ~22% coverage —
+       enough to read as a soft gray "stamp" (matches the BarTender
+       reference) but light enough that body text printed on top stays
+       readable. translateX(-2px) optically centers MP (П is heavier than
+       М so geometric centering looked right-biased). */
     color: transparent;
-    background: radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px;
+    background: radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px;
     -webkit-background-clip: text;
     background-clip: text;
     transform: translateX(-2px);
@@ -694,13 +697,16 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Fine halftone via background-clip:text. Each dot is pure black so
-       it survives Sharp.threshold(120) binarization for the thermal
-       printer (rgba(0,0,0,0.18) at luminance ~209 was wiped to white).
-       3px tile is below the eye's resolving distance at ~30cm so the
-       dots blur into a uniform gray fill, like solid translucent letters. */
+    /* Halftone via background-clip:text. Each dot is pure black so it
+       survives Sharp.threshold(120) binarization for the thermal printer
+       (rgba(0,0,0,0.18) at luminance ~209 was wiped to white). 1px solid
+       dot with sharp 0.2px edge on a 4px tile gives ~22% coverage —
+       enough to read as a soft gray "stamp" (matches the BarTender
+       reference) but light enough that body text printed on top stays
+       readable. translateX(-2px) optically centers MP (П is heavier than
+       М so geometric centering looked right-biased). */
     color: transparent;
-    background: radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px;
+    background: radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px;
     -webkit-background-clip: text;
     background-clip: text;
     transform: translateX(-2px);
