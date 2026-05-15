@@ -178,16 +178,16 @@ export default function LabelPreview({
                 // so the watermark fits horizontally within label width.
                 fontSize: "500px",
                 letterSpacing: "-20px",
-                // Fine halftone — 3px tile blurs into solid gray fill at
-                // reading distance, every dot is pure black so survives
-                // Sharp.threshold(120) on bitmap print. translateX shifts
-                // the watermark slightly left to optically center MP within
-                // the label (default flex centering visually leans right).
-                color: "transparent",
-                background:
-                  "radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px",
-                WebkitBackgroundClip: "text",
-                backgroundClip: "text",
+                // Screen preview only — solid translucent gray. The
+                // CSS halftone-via-background-clip we used earlier
+                // looked perfect on 2× retina but disappeared on
+                // operators' 1080p monitors at sub-100% browser zoom:
+                // the 1px dots ended up sub-pixel during rasterization
+                // and the watermark fluttered in and out as the user
+                // resized. The print path in /api/render keeps the
+                // halftone because Sharp.threshold(120) wipes any
+                // translucent fill on the bitmap thermal printer.
+                color: "rgba(0, 0, 0, 0.3)",
                 transform: "translateX(-2px)",
                 lineHeight: 0.85,
                 pointerEvents: "none",
@@ -299,16 +299,16 @@ export default function LabelPreview({
               // so the watermark fits horizontally within label width.
               fontSize: "500px",
               letterSpacing: "-20px",
-              // Fine halftone — 3px tile blurs into solid gray fill at
-              // reading distance, every dot is pure black so survives
-              // Sharp.threshold(120) on bitmap print. translateX shifts
-              // the watermark slightly left to optically center MP within
-              // the label (default flex centering visually leans right).
-              color: "transparent",
-              background:
-                "radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px",
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
+              // Screen preview only — solid translucent gray. The
+              // CSS halftone-via-background-clip we used earlier
+              // looked perfect on 2× retina but disappeared on
+              // operators' 1080p monitors at sub-100% browser zoom:
+              // the 1px dots ended up sub-pixel during rasterization
+              // and the watermark fluttered in and out as the user
+              // resized. The print path in /api/render keeps the
+              // halftone because Sharp.threshold(120) wipes any
+              // translucent fill on the bitmap thermal printer.
+              color: "rgba(0, 0, 0, 0.3)",
               transform: "translateX(-2px)",
               lineHeight: 0.85,
               pointerEvents: "none",
