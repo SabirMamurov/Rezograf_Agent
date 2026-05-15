@@ -505,16 +505,16 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Halftone dot pattern via background-clip:text. Each dot is pure
-       black so it survives Sharp.threshold(120) binarization for the
-       thermal printer (rgba(0,0,0,0.18) at luminance ~209 was wiped by
-       threshold and the watermark vanished on print). Sparse dots read
-       as a soft gray "stamp" but don't smear into the body text the way
-       diagonal stripes did. */
+    /* Fine halftone via background-clip:text. Each dot is pure black so
+       it survives Sharp.threshold(120) binarization for the thermal
+       printer (rgba(0,0,0,0.18) at luminance ~209 was wiped to white).
+       3px tile is below the eye's resolving distance at ~30cm so the
+       dots blur into a uniform gray fill, like solid translucent letters. */
     color: transparent;
-    background: radial-gradient(circle, #000 0 1.5px, transparent 2px) 0 0 / 7px 7px;
+    background: radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px;
     -webkit-background-clip: text;
     background-clip: text;
+    transform: translateX(-2px);
     line-height: 0.85;
     pointer-events: none;
     user-select: none;
@@ -694,16 +694,16 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Halftone dot pattern via background-clip:text. Each dot is pure
-       black so it survives Sharp.threshold(120) binarization for the
-       thermal printer (rgba(0,0,0,0.18) at luminance ~209 was wiped by
-       threshold and the watermark vanished on print). Sparse dots read
-       as a soft gray "stamp" but don't smear into the body text the way
-       diagonal stripes did. */
+    /* Fine halftone via background-clip:text. Each dot is pure black so
+       it survives Sharp.threshold(120) binarization for the thermal
+       printer (rgba(0,0,0,0.18) at luminance ~209 was wiped to white).
+       3px tile is below the eye's resolving distance at ~30cm so the
+       dots blur into a uniform gray fill, like solid translucent letters. */
     color: transparent;
-    background: radial-gradient(circle, #000 0 1.5px, transparent 2px) 0 0 / 7px 7px;
+    background: radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px;
     -webkit-background-clip: text;
     background-clip: text;
+    transform: translateX(-2px);
     line-height: 0.85;
     pointer-events: none;
     user-select: none;

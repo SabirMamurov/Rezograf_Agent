@@ -178,14 +178,17 @@ export default function LabelPreview({
                 // so the watermark fits horizontally within label width.
                 fontSize: "500px",
                 letterSpacing: "-20px",
-                // Halftone dots via background-clip:text — sparse pure-black
-                // dots survive Sharp.threshold(120) on bitmap print and read
-                // as a soft gray "stamp" without smearing into body text.
+                // Fine halftone — 3px tile blurs into solid gray fill at
+                // reading distance, every dot is pure black so survives
+                // Sharp.threshold(120) on bitmap print. translateX shifts
+                // the watermark slightly left to optically center MP within
+                // the label (default flex centering visually leans right).
                 color: "transparent",
                 background:
-                  "radial-gradient(circle, #000 0 1.5px, transparent 2px) 0 0 / 7px 7px",
+                  "radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px",
                 WebkitBackgroundClip: "text",
                 backgroundClip: "text",
+                transform: "translateX(-2px)",
                 lineHeight: 0.85,
                 pointerEvents: "none",
                 userSelect: "none",
@@ -296,14 +299,17 @@ export default function LabelPreview({
               // so the watermark fits horizontally within label width.
               fontSize: "500px",
               letterSpacing: "-20px",
-              // Halftone dots via background-clip:text — sparse pure-black
-              // dots survive Sharp.threshold(120) on bitmap print and read
-              // as a soft gray "stamp" without smearing into body text.
+              // Fine halftone — 3px tile blurs into solid gray fill at
+              // reading distance, every dot is pure black so survives
+              // Sharp.threshold(120) on bitmap print. translateX shifts
+              // the watermark slightly left to optically center MP within
+              // the label (default flex centering visually leans right).
               color: "transparent",
               background:
-                "radial-gradient(circle, #000 0 1.5px, transparent 2px) 0 0 / 7px 7px",
+                "radial-gradient(circle, #000 0 1px, transparent 1.4px) 0 0 / 3px 3px",
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
+              transform: "translateX(-2px)",
               lineHeight: 0.85,
               pointerEvents: "none",
               userSelect: "none",
