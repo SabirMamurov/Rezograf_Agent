@@ -476,6 +476,7 @@ function buildShkLabelHtml(
 
   const subtitle = (product?.weight || "").trim();
   const title = product?.name || "";
+  const isExport = !!product?.isExport;
 
   return `<!DOCTYPE html>
 <html>
@@ -491,8 +492,25 @@ ${fontStyleBlock}
       font-smooth: never !important; }
   html, body { width: ${widthMm}mm; height: ${heightMm}mm; margin: 0; padding: 0; background: white; overflow: hidden; }
   .outer { width: ${widthMm}mm; height: ${heightMm}mm; overflow: hidden; }
-  .canvas { width: ${widthMm * 10}px; height: ${heightMm * 10}px; box-sizing: border-box; }
+  .canvas { width: ${widthMm * 10}px; height: ${heightMm * 10}px; box-sizing: border-box; position: relative; }
+  .export-mark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Roboto Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 800px;
+    color: rgba(0, 0, 0, 0.18);
+    line-height: 0.85;
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+  }
   .inner {
+    position: relative;
+    z-index: 1;
     width: ${widthMm * 10}px;
     font-family: 'Roboto Condensed', sans-serif;
     font-weight: 700;
@@ -537,6 +555,7 @@ ${fontStyleBlock}
 <body>
   <div class="outer">
     <div class="canvas">
+      ${isExport ? `<div class="export-mark">Э</div>` : ""}
       <div class="inner">
         <div class="shk-title">${escapeHtml(title)}</div>
         ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
@@ -649,8 +668,26 @@ ${fontStyleBlock}
     width: ${widthMm * 10}px;
     height: ${heightMm * 10}px;
     box-sizing: border-box;
+    position: relative;
+  }
+  .export-mark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Roboto Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 800px;
+    color: rgba(0, 0, 0, 0.18);
+    line-height: 0.85;
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
   }
   .inner {
+    position: relative;
+    z-index: 1;
     width: ${widthMm * 10}px;
     font-family: 'Roboto Condensed', sans-serif;
     font-weight: 700;
@@ -672,6 +709,7 @@ ${fontStyleBlock}
 <body>
   <div class="outer">
     <div class="canvas">
+      ${product?.isExport ? `<div class="export-mark">Э</div>` : ""}
       <div class="inner">
       <!-- TOP ROW: Barcode + Icons & SKU
            Proportional widths (flex-basis %) instead of fixed px so the row

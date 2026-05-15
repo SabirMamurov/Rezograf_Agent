@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
       boxWeight: source.boxWeight,
       sponsorText: source.sponsorText,
       extraText: source.extraText,
+      isExport: source.isExport,
       templateId: source.templateId,
     },
   });

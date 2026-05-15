@@ -80,6 +80,13 @@ model Product {
   // between the title block and the quantity/weight block. Populated from
   // BarTender extractions (script: scripts/migrate_extra_text.js).
   extraText       String?
+  // Export mark — when true, the renderer paints a large grey "Э" watermark
+  // behind the whole label. Used by the warehouse to spot export-bound
+  // products at a glance. In BarTender source files the "Э" lives as a
+  // standalone text object (most often Текст 3). Populated from extractions
+  // by scripts/migrate_export_mark.js — operators can also toggle it from
+  // the /print inspector edit form.
+  isExport        Boolean  @default(false)
 
   templateId String?
   template   Template? @relation(fields: [templateId], references: [id])

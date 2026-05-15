@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
       boxWeight: body.boxWeight || null,
       sponsorText: body.sponsorText || null,
       extraText: body.extraText || null,
+      isExport: !!body.isExport,
       templateId: body.templateId || null,
     },
   });
@@ -175,17 +176,23 @@ export async function PATCH(req: NextRequest) {
     "extraText",
   ];
 
-  const updateData: Record<string, string | null> = {};
+  const updateData: Record<string, string | boolean | null> = {};
   for (const key of allowedFields) {
     if (key in data) {
       updateData[key] = data[key] || null;
     }
   }
+  // Booleans are handled separately — falsy boolean (false) must NOT become null.
+  if ("isExport" in data) {
+    updateData.isExport = !!data.isExport;
+  }
   // Normalize barcode on edit too: if operator types 13 digits with '2' prefix
   // → save 14-digit ITF-14 with computed check; if 12 digits → save 13-digit
   // EAN-13 with check. Mirrors the rule applied to existing data.
   if ("barcodeEan13" in updateData) {
-    updateData.barcodeEan13 = normalizeStoredBarcode(updateData.barcodeEan13);
+    updateData.barcodeEan13 = normalizeStoredBarcode(
+      typeof updateData.barcodeEan13 === "string" ? updateData.barcodeEan13 : null,
+    );
   }
 
   // Read the BEFORE state so we can diff against the post-update record.

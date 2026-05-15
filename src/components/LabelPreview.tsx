@@ -18,6 +18,7 @@ interface Product {
   sponsorText?: string | null;
   extraText?: string | null;
   btwFilePath?: string | null;
+  isExport?: boolean | null;
 }
 
 interface LabelPreviewProps {
@@ -160,10 +161,34 @@ export default function LabelPreview({
             transformOrigin: "top left",
             overflow: "hidden",
             boxSizing: "border-box",
+            position: "relative",
           }}
         >
+          {product?.isExport && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'Roboto Condensed', sans-serif",
+                fontWeight: 700,
+                fontSize: "800px",
+                color: "rgba(0,0,0,0.18)",
+                lineHeight: 0.85,
+                pointerEvents: "none",
+                userSelect: "none",
+                zIndex: 0,
+              }}
+            >
+              Э
+            </div>
+          )}
           <div
             style={{
+              position: "relative",
+              zIndex: 1,
               width: V_WIDTH + "px",
               fontFamily: "'Roboto Condensed', sans-serif",
               fontWeight: 700,
@@ -244,12 +269,36 @@ export default function LabelPreview({
           transformOrigin: "top left",
           overflow: "hidden",
           boxSizing: "border-box",
+          position: "relative",
         }}
       >
+        {product?.isExport && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "'Roboto Condensed', sans-serif",
+              fontWeight: 700,
+              fontSize: "800px",
+              color: "rgba(0,0,0,0.18)",
+              lineHeight: 0.85,
+              pointerEvents: "none",
+              userSelect: "none",
+              zIndex: 0,
+            }}
+          >
+            Э
+          </div>
+        )}
         <div
           ref={innerRef}
           className="inner label-print-crisp"
           style={{
+            position: "relative",
+            zIndex: 1,
             width: (V_WIDTH / shrinkScale) + "px",
             transform: `scale(${shrinkScale})`,
             transformOrigin: "top left",
