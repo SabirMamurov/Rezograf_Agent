@@ -178,7 +178,13 @@ export default function LabelPreview({
                 // so the watermark fits horizontally within label width.
                 fontSize: "500px",
                 letterSpacing: "-20px",
-                color: "rgba(0,0,0,0.18)",
+                // Diagonal hatch via background-clip:text — pure black
+                // stripes survive Sharp.threshold(120) on bitmap print.
+                color: "transparent",
+                background:
+                  "repeating-linear-gradient(45deg, #000 0 3px, transparent 3px 11px)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
                 lineHeight: 0.85,
                 pointerEvents: "none",
                 userSelect: "none",
@@ -289,7 +295,13 @@ export default function LabelPreview({
               // so the watermark fits horizontally within label width.
               fontSize: "500px",
               letterSpacing: "-20px",
-              color: "rgba(0,0,0,0.18)",
+              // Diagonal hatch via background-clip:text — pure black
+              // stripes survive Sharp.threshold(120) on bitmap print.
+              color: "transparent",
+              background:
+                "repeating-linear-gradient(45deg, #000 0 3px, transparent 3px 11px)",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
               lineHeight: 0.85,
               pointerEvents: "none",
               userSelect: "none",

@@ -505,7 +505,14 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    color: rgba(0, 0, 0, 0.18);
+    /* Diagonal hatch via background-clip:text. Every visible pixel is
+       pure black so it survives Sharp.threshold(120) binarization for
+       the thermal printer; rgba(0,0,0,0.18) gives luminance ~209 → wiped
+       to white by threshold and watermark disappeared on print. */
+    color: transparent;
+    background: repeating-linear-gradient(45deg, #000 0 3px, transparent 3px 11px);
+    -webkit-background-clip: text;
+    background-clip: text;
     line-height: 0.85;
     pointer-events: none;
     user-select: none;
@@ -685,7 +692,14 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    color: rgba(0, 0, 0, 0.18);
+    /* Diagonal hatch via background-clip:text. Every visible pixel is
+       pure black so it survives Sharp.threshold(120) binarization for
+       the thermal printer; rgba(0,0,0,0.18) gives luminance ~209 → wiped
+       to white by threshold and watermark disappeared on print. */
+    color: transparent;
+    background: repeating-linear-gradient(45deg, #000 0 3px, transparent 3px 11px);
+    -webkit-background-clip: text;
+    background-clip: text;
     line-height: 0.85;
     pointer-events: none;
     user-select: none;
