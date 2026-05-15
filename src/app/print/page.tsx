@@ -299,6 +299,12 @@ export default function PrintPage() {
   const [moveFolderSearchQuery, setMoveFolderSearchQuery] = useState("");
   const [movingFolderInProgress, setMovingFolderInProgress] = useState(false);
 
+  // Rename-folder state — single-input modal that changes the leaf segment
+  // of the currently-open folder. Reuses PATCH /api/folders with `newName`.
+  const [isRenamingFolder, setIsRenamingFolder] = useState(false);
+  const [renameFolderInput, setRenameFolderInput] = useState("");
+  const [renamingFolderInProgress, setRenamingFolderInProgress] = useState(false);
+
   const basePrefix = 'C:\\Users\\Пользователь\\Desktop\\extracted_labels\\';
 
   // Derive the FULL hierarchical folder path of a product from its
@@ -1013,6 +1019,45 @@ export default function PrintPage() {
     }
   };
 
+  const openRenameFolderModal = () => {
+    if (!currentPath) return;
+    const leaf = currentPath.split(/[\\/]/).pop() || "";
+    setRenameFolderInput(leaf);
+    setIsRenamingFolder(true);
+  };
+
+  const handleRenameCurrentFolder = async () => {
+    if (!currentPath) return;
+    const newName = renameFolderInput.trim();
+    if (!newName) {
+      setToast({ message: "Имя папки не может быть пустым", type: "error" });
+      return;
+    }
+    setRenamingFolderInProgress(true);
+    try {
+      const res = await fetch("/api/folders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: currentPath, newName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to rename folder");
+      setToast({
+        message: `Папка переименована (${data.moved} товар${data.moved === 1 ? "" : "ов"})`,
+        type: "success",
+      });
+      setIsRenamingFolder(false);
+      // Navigate to the new path so the operator stays inside the same
+      // (now-renamed) folder.
+      setCurrentPath(data.newFolderPath || currentPath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Ошибка переименования";
+      setToast({ message: msg, type: "error" });
+    } finally {
+      setRenamingFolderInProgress(false);
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-[var(--theme-workspace)] text-[var(--theme-text)] rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden border border-[var(--theme-border)] relative">
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] pointer-events-none"></div>
@@ -1165,6 +1210,20 @@ export default function PrintPage() {
             <button onClick={() => setIsCreatingFolder(true)} className="py-2 px-4 text-[11px] font-bold uppercase tracking-wide bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] rounded-xl shadow-sm transition-all border border-[var(--theme-border)] cursor-pointer flex items-center gap-2">
               <FolderIcon className="w-3.5 h-3.5 mr-1" /> Создать папку
             </button>
+            {/* Rename — visible only when the operator is INSIDE a folder
+                (currentPath non-empty). Targets the currently-opened folder
+                leaf. Lives next to «Создать папку» rather than in the
+                inspector because it's a folder-level action, not a
+                product-level one. */}
+            {currentPath && (
+              <button
+                onClick={openRenameFolderModal}
+                title={`Переименовать «${currentPath.split(/[\\/]/).pop()}»`}
+                className="py-2 px-4 text-[11px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 rounded-xl shadow-sm transition-all border border-amber-500/30 cursor-pointer flex items-center gap-2"
+              >
+                ✎ Переименовать папку
+              </button>
+            )}
           </div>
           <table className="w-full table-fixed divide-y divide-[var(--theme-border)] text-sm">
             <thead className="bg-[var(--color-surface-panel)]/95 sticky top-[53px] z-10 backdrop-blur-xl border-b border-[var(--theme-border)]">
@@ -1947,6 +2006,63 @@ export default function PrintPage() {
                 className="px-5 py-2 text-sm font-bold uppercase tracking-wider bg-red-500 text-white hover:bg-red-600 border-2 border-red-500 rounded-lg shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
                 🗑️ Да, удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RENAME FOLDER MODAL — single-input modal that changes the leaf
+          segment of the currently-open folder. Backend reuses PATCH
+          /api/folders with `newName` (same code path as move, just leaves
+          the parent untouched). */}
+      {isRenamingFolder && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => !renamingFolderInProgress && setIsRenamingFolder(false)}
+        >
+          <div
+            className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 w-[460px] max-w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-[var(--theme-text)] mb-1">Переименовать папку</h2>
+            <div className="text-sm text-[var(--theme-text-muted)] mb-1">Текущий путь:</div>
+            <div className="text-xs font-mono text-indigo-500 mb-4 truncate" title={currentPath}>{currentPath}</div>
+
+            <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] mb-1.5 tracking-wider">НОВОЕ ИМЯ ПАПКИ</label>
+            <input
+              type="text"
+              className="input-field w-full mb-4"
+              value={renameFolderInput}
+              onChange={(e) => setRenameFolderInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !renamingFolderInProgress) handleRenameCurrentFolder();
+                if (e.key === "Escape") setIsRenamingFolder(false);
+              }}
+              autoFocus
+              placeholder="Например: ПЦО (новое имя)"
+            />
+            <p className="text-[11px] text-[var(--theme-text-muted)] mb-5 leading-relaxed">
+              Папка останется в том же родителе, изменится только её имя.
+              Все вложенные подпапки и этикетки переедут вместе.
+              Слеши (<code>\</code> и <code>/</code>) автоматически заменятся
+              на пробел.
+            </p>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setIsRenamingFolder(false)}
+                disabled={renamingFolderInProgress}
+                className="px-4 py-2 text-sm font-bold tracking-wide text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-overlay)] border border-[var(--theme-border)] rounded-lg transition-all cursor-pointer disabled:opacity-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleRenameCurrentFolder}
+                disabled={renamingFolderInProgress || !renameFolderInput.trim()}
+                className="px-5 py-2 text-sm font-bold uppercase tracking-wider bg-amber-500 text-white hover:bg-amber-600 border-2 border-amber-500 rounded-lg shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all cursor-pointer disabled:opacity-50"
+              >
+                {renamingFolderInProgress ? "Переименование..." : "✎ Переименовать"}
               </button>
             </div>
           </div>
