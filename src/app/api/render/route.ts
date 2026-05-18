@@ -647,19 +647,15 @@ function buildLabelHtml(
     /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
   // ШК (showbox barcode-only) labels: products under any folder named
-  // "ШК" or "Единичный ШК" use a stripped-down template — just title +
-  // optional subtitle + large barcode. No manufacturer, no icons, no
-  // dates, no nutritionals. Subtitle is re-purposed from `weight` for
-  // these rows. Real prod folders matching this rule today (May 2026):
-  //   МП\ПЦО\Конфеты\Единичный ШК                (~36 files)
-  //   МП\ПЦО\Шоу-бокс\Шоу-бокс 540 г\ШК на единицу
-  //   МП\ПЦО\Шоу-бокс\Шоу-бокс 720 гр\Единичный ШК
-  //   ...plus several smaller "Единичный ШК" / "ШК на единицу" subfolders
-  // \ШБ ТУЛА\ШК\ kept in the rule for backwards compat — it was the
-  // original target before operators reorganised the tree.
+  // "Единичный ШК" use a stripped-down template — just title + optional
+  // subtitle + large barcode. No manufacturer, no icons, no dates, no
+  // nutritionals. Subtitle is re-purposed from `weight` for these rows.
+  // Operator confirmed (May 2026): only «Единичный ШК» qualifies —
+  // similarly-named «ШК на единицу» and the unused «ШБ ТУЛА\ШК» path
+  // should keep the standard layout.
   const isShkLabel =
     typeof product?.btwFilePath === "string" &&
-    /\\(ШБ ТУЛА\\ШК|Единичный ШК|ШК на единицу)\\/i.test(product.btwFilePath);
+    /\\Единичный ШК\\/i.test(product.btwFilePath);
   if (isShkLabel) {
     return buildShkLabelHtml(product, barcodeSvg, widthMm, heightMm, embeddedFontCss);
   }

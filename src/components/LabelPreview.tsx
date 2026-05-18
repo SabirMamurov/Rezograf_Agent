@@ -129,13 +129,13 @@ export default function LabelPreview({
     /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
   // ШК (showbox barcode-only) labels: products inside any folder named
-  // "ШК", "Единичный ШК", or "ШК на единицу" use a stripped-down
-  // template — title + optional subtitle + large barcode. Subtitle is
-  // taken from product.weight (re-purposed for these rows).
+  // "Единичный ШК" use a stripped-down template — title + optional
+  // subtitle + large barcode. Subtitle is taken from product.weight
+  // (re-purposed for these rows).
   // Keep aligned with the regex in src/app/api/render/route.ts → isShkLabel.
   const isShkLabel =
     typeof product?.btwFilePath === "string" &&
-    /\\(ШБ ТУЛА\\ШК|Единичный ШК|ШК на единицу)\\/i.test(product.btwFilePath);
+    /\\Единичный ШК\\/i.test(product.btwFilePath);
   if (isShkLabel) {
     const rawSubtitle = (product?.weight || "").trim();
     const title = product?.name || "";
