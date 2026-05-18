@@ -137,8 +137,18 @@ export default function LabelPreview({
     typeof product?.btwFilePath === "string" &&
     /\\(ШБ ТУЛА\\ШК|Единичный ШК|ШК на единицу)\\/i.test(product.btwFilePath);
   if (isShkLabel) {
-    const subtitle = (product?.weight || "").trim();
+    const rawSubtitle = (product?.weight || "").trim();
     const title = product?.name || "";
+    // ШК labels conventionally encode the weight inside the title
+    // ("...МП/200г"), so showing the separate `weight` subtitle below
+    // the name printed the same number twice. Hide the subtitle when
+    // the weight is already inside the name. Mirror the check in
+    // buildShkLabelHtml (src/app/api/render/route.ts) so preview = print.
+    const norm = (s: string) =>
+      s.toLowerCase().replace(/\s+/g, "").replace(/ё/g, "е");
+    const weightInTitle =
+      rawSubtitle.length > 0 && norm(title).includes(norm(rawSubtitle));
+    const subtitle = weightInTitle ? "" : rawSubtitle;
     return (
       <div
         className="label-preview-frame"

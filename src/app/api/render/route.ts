@@ -481,8 +481,19 @@ function buildShkLabelHtml(
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700;900&subset=cyrillic,cyrillic-ext,latin&display=swap" rel="stylesheet">`;
 
-  const subtitle = (product?.weight || "").trim();
+  const rawSubtitle = (product?.weight || "").trim();
   const title = product?.name || "";
+  // ШК labels conventionally encode the weight inside the title (e.g.
+  // "...МП/200г") so the separate `weight` subtitle ended up showing
+  // the same number twice on the printed sticker. Suppress the subtitle
+  // when the weight is already inside the name. Normalisation collapses
+  // whitespace and lowercases so "200 г" matches "200г" and "200 Г".
+  // Keep aligned with the same heuristic in LabelPreview.tsx ШК branch.
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/\s+/g, "").replace(/ё/g, "е");
+  const weightInTitle =
+    rawSubtitle.length > 0 && norm(title).includes(norm(rawSubtitle));
+  const subtitle = weightInTitle ? "" : rawSubtitle;
   const isExport = !!product?.isExport;
 
   return `<!DOCTYPE html>
