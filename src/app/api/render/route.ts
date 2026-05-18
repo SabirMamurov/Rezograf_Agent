@@ -361,34 +361,17 @@ export async function POST(req: NextRequest) {
         omitBackground: false,
       });
 
-      // Two-layer composite so the МП watermark prints as smooth gray
-      // instead of a CSS dot halftone. Body text stays binary (any
-      // antialiasing here gets read by the thermal head as fuzzy ink),
-      // while the watermark area passes through as grayscale and lets
-      // the printer driver do its own dithering.
-      //
-      // Layer A — smooth grayscale (no threshold, lanczos resize):
-      // preserves the rgba(0,0,0,0.3) МП fill as ~178-luminance gray.
-      const watermarkLayer = await sharp(screenshotBuffer)
-        .grayscale()
-        .resize(targetW, targetH, { kernel: "lanczos3", fit: "fill" })
-        .toBuffer();
-      // Layer B — crisp binary text (threshold + nearest resize):
-      // identical to the v1.2.x pipeline. Watermark (luminance ~178)
-      // is above threshold 120 → wiped to white here, leaving only
-      // text/barcodes/icons as pure black on white.
-      const textLayer = await sharp(screenshotBuffer)
+      // Single-pass binary pipeline (v1.2.5 and earlier). Watermark is
+      // a CSS halftone (each dot pure black) so it survives threshold
+      // and gets read by the thermal head as discrete dots. Body text
+      // stays pixel-perfect. The v1.3.0 grayscale composite tried to
+      // ship smooth gray watermark too, but lanczos resize spilled
+      // antialiased edges around the body text and the thermal driver
+      // dithered them as fuzzy halos. CLAUDE.md predicted exactly this.
+      const monoPngBuffer = await sharp(screenshotBuffer)
         .grayscale()
         .threshold(120)
         .resize(targetW, targetH, { kernel: "nearest", fit: "fill" })
-        .png()
-        .toBuffer();
-      // darken blend keeps min(base, overlay) per pixel: where text is
-      // black, output is black; where text is white, the gray watermark
-      // shows through. Result is a single grayscale PNG with crisp
-      // black text + smooth gray МП ready for the thermal driver.
-      const monoPngBuffer = await sharp(watermarkLayer)
-        .composite([{ input: textLayer, blend: "darken" }])
         .png({ compressionLevel: 9 })
         .toBuffer();
 
@@ -529,15 +512,23 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Solid translucent gray. Looks like a smooth "stamp" rather than
-       a halftone dot pattern. On the bitmap print path Sharp does NOT
-       apply a global threshold anymore — it composites a binary text
-       layer over a smooth grayscale watermark layer (see image pipeline
-       below), so this translucent fill is preserved as soft gray on
-       the printed label and the thermal printer driver dithers it.
-       translateX(-2px) optically centers MP (П is heavier than М so
-       geometric centering looked right-biased). */
-    color: rgba(0, 0, 0, 0.3);
+    /* Halftone via background-clip:text. Each dot is pure black so it
+       survives Sharp.threshold(120) binarization for the thermal printer
+       (rgba(0,0,0,0.18) at luminance ~209 was wiped to white). 1px solid
+       dot with sharp 0.2px edge on a 4px tile gives ~22% coverage —
+       enough to read as a soft gray "stamp" (matches the BarTender
+       reference) but light enough that body text printed on top stays
+       readable. translateX(-2px) optically centers MP (П is heavier than
+       М so geometric centering looked right-biased).
+       NOTE: v1.3.0 tried solid rgba(0,0,0,0.3) + two-layer composite
+       to ship smooth gray on the printer too, but the lanczos resize
+       of the watermark layer leaked antialiased edges around body
+       text → operators reported "размыто печатаются". CLAUDE.md
+       warned about this. Reverted to halftone + binary pipeline. */
+    color: transparent;
+    background: radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px;
+    -webkit-background-clip: text;
+    background-clip: text;
     transform: translateX(-2px);
     line-height: 0.85;
     pointer-events: none;
@@ -718,15 +709,23 @@ ${fontStyleBlock}
        watermark fits horizontally within the label width. */
     font-size: 500px;
     letter-spacing: -20px;
-    /* Solid translucent gray. Looks like a smooth "stamp" rather than
-       a halftone dot pattern. On the bitmap print path Sharp does NOT
-       apply a global threshold anymore — it composites a binary text
-       layer over a smooth grayscale watermark layer (see image pipeline
-       below), so this translucent fill is preserved as soft gray on
-       the printed label and the thermal printer driver dithers it.
-       translateX(-2px) optically centers MP (П is heavier than М so
-       geometric centering looked right-biased). */
-    color: rgba(0, 0, 0, 0.3);
+    /* Halftone via background-clip:text. Each dot is pure black so it
+       survives Sharp.threshold(120) binarization for the thermal printer
+       (rgba(0,0,0,0.18) at luminance ~209 was wiped to white). 1px solid
+       dot with sharp 0.2px edge on a 4px tile gives ~22% coverage —
+       enough to read as a soft gray "stamp" (matches the BarTender
+       reference) but light enough that body text printed on top stays
+       readable. translateX(-2px) optically centers MP (П is heavier than
+       М so geometric centering looked right-biased).
+       NOTE: v1.3.0 tried solid rgba(0,0,0,0.3) + two-layer composite
+       to ship smooth gray on the printer too, but the lanczos resize
+       of the watermark layer leaked antialiased edges around body
+       text → operators reported "размыто печатаются". CLAUDE.md
+       warned about this. Reverted to halftone + binary pipeline. */
+    color: transparent;
+    background: radial-gradient(circle, #000 0 1px, transparent 1.2px) 0 0 / 4px 4px;
+    -webkit-background-clip: text;
+    background-clip: text;
     transform: translateX(-2px);
     line-height: 0.85;
     pointer-events: none;
