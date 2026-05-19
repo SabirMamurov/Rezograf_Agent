@@ -171,16 +171,34 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { productId, mfgDate, expDate, format } = body;
+  const { productId, mfgDate, expDate, format, productOverride } = body;
 
-  if (!productId) {
-    return NextResponse.json({ error: "productId is required" }, { status: 400 });
+  // productOverride path — used by /vkusvill (and any future "synthetic"
+  // products that don't live in the catalogue DB). The caller hands the
+  // route a fully-formed Product-shaped object and we render it as if it
+  // had come from prisma.product.findUnique. No DB write, no DB read.
+  //
+  // Trade-off: this is an internal LAN tool with no auth, so accepting
+  // arbitrary product data here is acceptable. Don't reuse this path for
+  // anything Internet-facing without sanitising input first.
+  // The "with template" findUnique payload is wider than the bare
+  // findUnique return type — type the variable as `any` here to avoid
+  // a noisy Prisma generic. The fields actually read below (name,
+  // template?.widthMm, barcodeEan13, …) are runtime-checked by their
+  // own callsites or by buildLabelHtml, so we don't lose safety.
+  let product: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  if (productOverride && typeof productOverride === "object") {
+    product = productOverride;
+  } else {
+    if (!productId) {
+      return NextResponse.json({ error: "productId is required" }, { status: 400 });
+    }
+    product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: { template: true },
+    });
   }
-
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    include: { template: true },
-  });
 
   if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });

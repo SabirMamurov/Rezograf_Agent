@@ -25,6 +25,17 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    href: "/vkusvill",
+    label: "ВкусВилл",
+    // Barcode glyph — vertical bars of varying widths, evoking the
+    // CODE128 strip that's the heart of the ВкусВилл label.
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M4 6v12M7 6v12M10 6v12M13 6v12M17 6v12M20 6v12" />
+      </svg>
+    ),
+  },
 ];
 
 export default function Sidebar() {
@@ -115,7 +126,7 @@ export default function Sidebar() {
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-surface)] to-transparent pointer-events-none"></div>
         <Link href="/changelog" className={`text-[11px] font-medium tracking-wide relative z-10 flex items-center gap-2 no-underline transition-colors ${pathname === '/changelog' ? 'text-indigo-500' : 'text-[var(--theme-text-muted, var(--color-text-muted))] hover:text-[var(--theme-text)]'}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></span>
-          v1.3.6
+          v1.4.0
         </Link>
         
         {/* Theme Toggle */}
