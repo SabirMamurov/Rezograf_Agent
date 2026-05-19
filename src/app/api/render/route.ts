@@ -514,6 +514,18 @@ function buildShkLabelHtml(
 
   const rawSubtitle = (product?.weight || "").trim();
   const title = product?.name || "";
+  // Adaptive title font sizing — long names wrap to 3+ lines and push
+  // the barcode + digits over the bottom edge of the half. Step down
+  // by character count so the whole content block fits in ~408px
+  // (450px half height minus 42px padding). Kept aligned with the same
+  // helper in LabelPreview.tsx (ШК branch).
+  const titleLen = title.length;
+  const titleFontPx =
+    titleLen <= 30 ? 38 :
+    titleLen <= 50 ? 32 :
+    titleLen <= 70 ? 26 :
+    22;
+  const subtitleFontPx = titleFontPx >= 32 ? 24 : 20;
   // ШК labels conventionally encode the weight inside the title (e.g.
   // "...МП/200г") so the separate `weight` subtitle ended up showing
   // the same number twice on the printed sticker. Suppress the subtitle
@@ -593,11 +605,11 @@ ${fontStyleBlock}
     z-index: 0;
   }
   .shk-half { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; color: black; }
-  /* Title bumped to 38px so the name reads at the same visual weight
-     as the digits below the barcode (was 32px — operator felt the text
-     was too small relative to the barcode). */
+  /* Title and subtitle sizes are emitted per-render via inline style
+     (computed from title length above). Default values here just cover
+     the case where the inline override is missing. */
   .shk-title {
-    font-size: 38px;
+    font-size: ${titleFontPx}px;
     font-weight: 700;
     text-align: center;
     line-height: 1.1;
@@ -607,7 +619,7 @@ ${fontStyleBlock}
     margin-bottom: 8px;
   }
   .shk-subtitle {
-    font-size: 24px;
+    font-size: ${subtitleFontPx}px;
     font-weight: 500;
     text-align: center;
     line-height: 1.1;

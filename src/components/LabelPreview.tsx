@@ -143,6 +143,16 @@ export default function LabelPreview({
   if (isShkLabel) {
     const rawSubtitle = (product?.weight || "").trim();
     const title = product?.name || "";
+    // Adaptive title size — see the same heuristic in route.ts's
+    // buildShkLabelHtml. Long names need to shrink so the barcode +
+    // digits stay inside their half of the doubled canvas.
+    const titleLen = title.length;
+    const titleFontPx =
+      titleLen <= 30 ? 38 :
+      titleLen <= 50 ? 32 :
+      titleLen <= 70 ? 26 :
+      22;
+    const subtitleFontPx = titleFontPx >= 32 ? 24 : 20;
     // For ШК labels we ALWAYS render the barcode digits as a separate
     // big-font HTML block below the bars regardless of code length. The
     // SVG is fetched with separateText=1 (bars only) by /print so the
@@ -230,7 +240,7 @@ export default function LabelPreview({
               <>
                 <div
                   style={{
-                    fontSize: "38px",
+                    fontSize: `${titleFontPx}px`,
                     fontWeight: 700,
                     textAlign: "center",
                     lineHeight: 1.1,
@@ -245,7 +255,7 @@ export default function LabelPreview({
                 {subtitle && (
                   <div
                     style={{
-                      fontSize: "24px",
+                      fontSize: `${subtitleFontPx}px`,
                       fontWeight: 500,
                       textAlign: "center",
                       lineHeight: 1.1,
