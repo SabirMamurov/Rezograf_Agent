@@ -430,24 +430,11 @@ export default function LabelPreview({
               {/* Icons — width:100% + flex-end pushes them to the right edge
                   of the 320px container (previously centered with ~20px of
                   padding on each side). */}
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", width: "100%", paddingLeft: "7px", boxSizing: "border-box" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {/* Per-product hide: see HIDE_ALU41_FOR_SKUS in
-                    src/app/api/render/route.ts. visibility:hidden keeps
-                    the bounding box so the rest of the row doesn't shift. */}
-                <img
-                  src="/icons/alu41.png"
-                  alt="ALU 41"
-                  style={{
-                    height: "48px",
-                    width: "auto",
-                    display: "block",
-                    objectFit: "contain",
-                    visibility: ["16756"].includes(String(product?.sku ?? ""))
-                      ? "hidden"
-                      : "visible",
-                  }}
-                />
+              {/* Icons row — centered so the three remaining icons line
+                  up directly above the centered SKU number below. The
+                  «41 ALU» icon was removed entirely in v1.3.6 (operator
+                  confirmed it shouldn't appear on any sticker). */}
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", justifyContent: "center", width: "100%", paddingLeft: "7px", boxSizing: "border-box" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/icons/eac.png" alt="EAC" style={{ height: "48px", width: "auto", display: "block", objectFit: "contain" }} />
                 {/* eslint-disable-next-line @next/next/no-img-element */}

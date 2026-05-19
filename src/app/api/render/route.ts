@@ -440,7 +440,6 @@ function loadIconsAsBase64(): Record<string, string> {
   const iconsDir = path.join(process.cwd(), "public", "icons");
   const icons: Record<string, string> = {};
   const iconFiles: Record<string, string> = {
-    alu41: "alu41.png",
     eac: "eac.png",
     fork_glass: "fork_glass.png",
     pap20: "pap20.png",
@@ -660,16 +659,10 @@ function buildLabelHtml(
     return buildShkLabelHtml(product, barcodeSvg, widthMm, heightMm, embeddedFontCss);
   }
 
-  const alu41Src = iconDataUris?.alu41 || "/icons/alu41.png";
-  // Per-product overrides: hide the «41 ALU» recyclable-code icon on
-  // specific stickers. Operator request — for these SKUs the physical
-  // packaging doesn't actually contain aluminium foil, so printing the
-  // 41 ALU mark is misleading. visibility:hidden keeps the icon's
-  // bounding box so the rest of the icon row stays right-aligned the
-  // same way it does on every other label.
-  // Keep aligned with LabelPreview.tsx.
-  const HIDE_ALU41_FOR_SKUS = new Set(["16756"]);
-  const hideAlu41 = HIDE_ALU41_FOR_SKUS.has(String(product?.sku || ""));
+  // The "41 ALU" recyclable-code icon was removed entirely in v1.3.6 —
+  // operator confirmed it shouldn't appear on any sticker because the
+  // physical packaging in this product range doesn't contain aluminium
+  // foil. With one fewer icon we also re-centre the remaining three.
   const eacSrc = iconDataUris?.eac || "/icons/eac.png";
   const forkGlassSrc = iconDataUris?.fork_glass || "/icons/fork_glass.png";
   const pap20Src = iconDataUris?.pap20 || "/icons/pap20.png";
@@ -809,11 +802,10 @@ ${fontStyleBlock}
              apart now that the row is 200 px tall to fit the taller
              barcode. -->
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 7px; flex: 1 1 0; min-width: 0; height: 160px; padding-top: 2px;">
-          <!-- Icons — width:100% + flex-end pushes them to the right edge
-               of the 320px container (previously centered with ~20px of
-               padding on each side). -->
-          <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; width: 100%; padding-left: 7px; box-sizing: border-box;">
-            <img src="${alu41Src}" style="height: 48px; width: auto; display: block; object-fit: contain;${hideAlu41 ? " visibility: hidden;" : ""}" />
+          <!-- Icons row — centered in the column so the three remaining
+               icons (EAC, fork+glass, 20 PAP) line up directly above the
+               centered SKU number. -->
+          <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%; padding-left: 7px; box-sizing: border-box;">
             <img src="${eacSrc}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
             <img src="${forkGlassSrc}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
             <img src="${pap20Src}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
