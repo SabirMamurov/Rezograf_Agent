@@ -38,6 +38,9 @@ export default function VkusvillPage() {
   }, [toast]);
 
   const mfgDate = useMemo(() => new Date(mfgDateStr + "T00:00:00"), [mfgDateStr]);
+  // Expiry is always auto = mfg + shelfLifeMonths (clamped). Single input
+  // by design — for ВкусВилл every batch ships with the same 12-month
+  // shelf life and the operator doesn't need to override it.
   const expDate = useMemo(
     () => addMonthsClamped(mfgDate, PRODUCT.shelfLifeMonths),
     [mfgDate],
@@ -271,15 +274,28 @@ export default function VkusvillPage() {
         {/* Left: just the date and the action buttons. Nothing else —
             the product never changes, so there's no picker. */}
         <div className="flex flex-col gap-4 bg-[var(--theme-overlay)] backdrop-blur-md p-5 rounded-2xl border border-[var(--theme-border)] shadow-[0_4px_12px_rgba(0,0,0,0.1)] h-fit">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-[var(--color-text-muted)]">Дата производства</span>
+          {/* Single date input — styled to match /print's date row so the
+              UX feels native to the site. The "Годен до" badge in the
+              header shows the auto-computed expiry derived from the
+              fixed 12-month shelf life. No override needed: every ВкусВилл
+              batch ships with the same shelf life. */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5 min-h-[18px] gap-2">
+              <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] tracking-wider">ДАТА ИЗГОТОВЛЕНИЯ</label>
+              <span
+                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border border-[var(--theme-border)]"
+                title={`Срок годности ${PRODUCT.shelfLifeMonths} мес — «Годен до» считается автоматически от даты производства`}
+              >
+                {PRODUCT.shelfLifeMonths} мес
+              </span>
+            </div>
             <input
               type="date"
               value={mfgDateStr}
               onChange={(e) => setMfgDateStr(e.target.value)}
-              className="px-3 py-2.5 rounded-lg bg-[var(--theme-input-bg)] border border-[var(--theme-border)] text-[var(--theme-text)] text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition"
+              className="w-full bg-[var(--theme-input-bg)] text-[var(--theme-text)] border border-[var(--theme-border)] p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono cursor-pointer transition-all"
             />
-          </label>
+          </div>
 
           <div className="text-xs text-[var(--color-text-muted)] space-y-1.5 pt-3 border-t border-[var(--theme-border)]">
             <div className="flex justify-between gap-3">
@@ -288,7 +304,7 @@ export default function VkusvillPage() {
             </div>
             <div className="flex justify-between gap-3">
               <span>Годен до</span>
-              <span className="text-[var(--theme-text)]">{expDateFormatted}</span>
+              <span className="text-[var(--theme-text)] font-mono">{expDateFormatted}</span>
             </div>
           </div>
 
