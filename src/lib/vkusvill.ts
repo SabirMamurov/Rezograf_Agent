@@ -21,6 +21,9 @@ export type VkusvillProductConfig = {
   prefix: string;
   /** Human-readable product name printed on the label. */
   name: string;
+  /** ВкусВилл internal article — printed on the label as a big SKU number,
+   *  same slot the standard Rezograf labels use for their SKU. */
+  sku: string;
   /** Net weight string (printed below the name, e.g. "100 г"). */
   weight: string;
   /** Shelf life in months — used to compute «Годен до» from the mfg date. */
@@ -29,6 +32,10 @@ export type VkusvillProductConfig = {
   storageCond?: string;
   composition?: string;
   nutritionalInfo?: string;
+  /** State standard / TU / СТО reference printed as a separate row. Most
+   *  ВкусВилл SKUs ship under a СТО code; this is what BarTender used to
+   *  put on the label as a small line below the storage block. */
+  certCode?: string;
   /** Manufacturer block override; defaults to the standard Sibirsky Kedr text. */
   manufacturer?: string;
 };
@@ -38,10 +45,13 @@ export const VKUSVILL_PRODUCTS: VkusvillProductConfig[] = [
     id: "orehi-kedrovye-100",
     prefix: "8536000010",
     name: "Орехи кедровые очищенные",
+    sku: "6509",
     weight: "100 г",
     shelfLifeMonths: 12,
+    composition: "Ядро кедрового ореха",
     storageCond:
       "Хранить при температуре от +4 до +20 °С и относительной влажности воздуха не более 75%.",
+    certCode: "СТО 97585510-049-2022",
   },
 ];
 
@@ -94,7 +104,7 @@ export function buildVkusvillRenderProduct(
   return {
     id: `vkusvill-${cfg.id}`,
     name: cfg.name,
-    sku: null,
+    sku: cfg.sku,
     sku2: null,
     composition: cfg.composition ?? null,
     weight: cfg.weight,
@@ -102,7 +112,7 @@ export function buildVkusvillRenderProduct(
     storageCond: cfg.storageCond ?? null,
     barcodeEan13: buildVkusvillBarcode(mfgDate, cfg.prefix),
     btwFilePath: null,
-    certCode: null,
+    certCode: cfg.certCode ?? null,
     quantity: null,
     boxWeight: null,
     sponsorText: null,
