@@ -491,6 +491,13 @@ function buildShkLabelHtml(
   widthMm: number,
   heightMm: number,
   embeddedFontCss?: string,
+  // For ITF-14 (14-digit codes) the SVG is fetched WITHOUT embedded
+  // text, and the digits are drawn below the bars as plain HTML so they
+  // print bigger / bolder / wear-resistant on the thermal head. When
+  // this string is non-null we have to render that block under EACH of
+  // the two stacked barcode copies — otherwise the operator gets bars
+  // with no human-readable digits.
+  separateBarcodeDigits?: string | null,
 ): string {
   const fontStyleBlock = embeddedFontCss && embeddedFontCss.length > 0
     ? `<style>${embeddedFontCss}</style>`
@@ -527,7 +534,22 @@ ${fontStyleBlock}
       font-smooth: never !important; }
   html, body { width: ${widthMm}mm; height: ${heightMm}mm; margin: 0; padding: 0; background: white; overflow: hidden; }
   .outer { width: ${widthMm}mm; height: ${heightMm}mm; overflow: hidden; }
-  .canvas { width: ${widthMm * 10}px; height: ${heightMm * 10}px; box-sizing: border-box; position: relative; }
+  /* Two stacked halves. Per operator request the prod-style layout
+     should just appear twice on one 70×90 mm sticker — same content,
+     no separator. flex-column distributes them 50/50. */
+  .canvas { width: ${widthMm * 10}px; height: ${heightMm * 10}px; box-sizing: border-box; position: relative; display: flex; flex-direction: column; }
+  .shk-half {
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 24px 24px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+  }
   .export-mark {
     position: absolute;
     inset: 0;
@@ -563,44 +585,53 @@ ${fontStyleBlock}
     user-select: none;
     z-index: 0;
   }
-  .inner {
-    position: relative;
-    z-index: 1;
-    width: ${widthMm * 10}px;
-    font-family: 'Roboto Condensed', sans-serif;
-    font-weight: 700;
-    color: black;
-    padding: 30px 24px 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    box-sizing: border-box;
-  }
+  .shk-half { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; color: black; }
+  /* Smaller than the v1.3.x single-copy version because each half only
+     gets ~45 mm of vertical room. */
   .shk-title {
-    font-size: 44px;
+    font-size: 32px;
     font-weight: 700;
     text-align: center;
     line-height: 1.1;
     text-decoration: underline;
-    text-decoration-thickness: 3px;
-    text-underline-offset: 5px;
-    margin-bottom: 14px;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+    margin-bottom: 8px;
   }
   .shk-subtitle {
-    font-size: 32px;
+    font-size: 22px;
     font-weight: 500;
     text-align: center;
     line-height: 1.1;
-    margin-bottom: 30px;
+    margin-bottom: 16px;
   }
   .shk-barcode {
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex: 1 1 auto;
+    min-height: 0;
   }
-  .shk-barcode > div { width: 90%; }
+  .shk-barcode > div { width: 88%; max-height: 100%; }
+  .shk-barcode svg { width: 100%; height: 100%; max-height: 100%; }
+  /* Human-readable digits for 14-digit ITF-14 codes (the SVG was
+     fetched with separateText=1 → bars only). Sized to roughly match
+     the prod single-version look — big enough that the warehouse can
+     scan the digits with eyes if the laser misses, and visually heavy
+     so it survives thermal-print wear. Letter-spacing kept modest so
+     the digits don't look stretched. */
+  .shk-barcode-digits {
+    font-family: 'Roboto Condensed', sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-align: center;
+    line-height: 1;
+    flex: 0 0 auto;
+    margin-top: 8px;
+  }
   img { -webkit-print-color-adjust: exact; print-color-adjust: exact;
         image-rendering: -webkit-optimize-contrast;
         image-rendering: crisp-edges;
@@ -611,12 +642,24 @@ ${fontStyleBlock}
   <div class="outer">
     <div class="canvas">
       ${isExport ? `<div class="export-mark">МП</div>` : ""}
-      <div class="inner">
+      <!-- Top half — full title/subtitle/barcode copy. -->
+      <div class="shk-half">
         <div class="shk-title">${escapeHtml(title)}</div>
         ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         <div class="shk-barcode">
           ${barcodeSvg ? `<div>${barcodeSvg}</div>` : ""}
         </div>
+        ${separateBarcodeDigits ? `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>` : ""}
+      </div>
+      <!-- Bottom half — identical copy stacked directly below, no
+           separator (operator request: just duplicate, no cut-line). -->
+      <div class="shk-half">
+        <div class="shk-title">${escapeHtml(title)}</div>
+        ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
+        <div class="shk-barcode">
+          ${barcodeSvg ? `<div>${barcodeSvg}</div>` : ""}
+        </div>
+        ${separateBarcodeDigits ? `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>` : ""}
       </div>
     </div>
   </div>
@@ -663,18 +706,28 @@ function buildLabelHtml(
     typeof product?.btwFilePath === "string" &&
     /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
-  // ШК (showbox barcode-only) labels: products under any folder named
-  // "Единичный ШК" use a stripped-down template — just title + optional
-  // subtitle + large barcode. No manufacturer, no icons, no dates, no
-  // nutritionals. Subtitle is re-purposed from `weight` for these rows.
-  // Operator confirmed (May 2026): only «Единичный ШК» qualifies —
-  // similarly-named «ШК на единицу» and the unused «ШБ ТУЛА\ШК» path
-  // should keep the standard layout.
+  // ШК (showbox barcode-only) labels: either the product is explicitly
+  // flagged via the `isShkLabel` column (set from the inspector edit
+  // form / create form), or its btwFilePath sits under a folder literally
+  // named «Единичный ШК» (legacy heuristic, kept for the ~55 products
+  // imported under that path before the explicit flag existed).
+  // The ШК template uses a stripped-down layout — just title + optional
+  // subtitle + large barcode — and prints TWO stacked copies per sticker
+  // with a dashed cut-line so the operator can scissors-split a single
+  // 70×90 mm print into two 70×45 mm labels (saves tape).
   const isShkLabel =
-    typeof product?.btwFilePath === "string" &&
-    /\\Единичный ШК\\/i.test(product.btwFilePath);
+    !!product?.isShkLabel ||
+    (typeof product?.btwFilePath === "string" &&
+      /\\Единичный ШК\\/i.test(product.btwFilePath));
   if (isShkLabel) {
-    return buildShkLabelHtml(product, barcodeSvg, widthMm, heightMm, embeddedFontCss);
+    return buildShkLabelHtml(
+      product,
+      barcodeSvg,
+      widthMm,
+      heightMm,
+      embeddedFontCss,
+      separateBarcodeDigits,
+    );
   }
 
   // The "41 ALU" recyclable-code icon was removed entirely in v1.3.6 —

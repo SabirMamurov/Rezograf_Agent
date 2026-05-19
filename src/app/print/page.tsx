@@ -54,6 +54,7 @@ interface Product {
   sponsorText: string | null;
   extraText: string | null;
   isExport: boolean | null;
+  isShkLabel: boolean | null;
   manufacturer: string | null;
   updatedAt?: string;
   template?: {
@@ -682,6 +683,7 @@ export default function PrintPage() {
       manufacturer: selected.manufacturer || "",
       extraText: selected.extraText || "",
       isExport: !!selected.isExport,
+      isShkLabel: !!selected.isShkLabel,
     });
     // Pull the file name (last segment) out of btwFilePath so the user
     // can rename the .btw file without manipulating the full Windows path.
@@ -1565,6 +1567,20 @@ export default function PrintPage() {
                           </div>
                         </label>
                       </div>
+                      <div>
+                        <label className="flex items-center gap-3 cursor-pointer select-none p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)] hover:border-cyan-500/40 transition-colors">
+                          <input
+                            type="checkbox"
+                            className="w-5 h-5 accent-cyan-500 cursor-pointer"
+                            checked={!!editForm.isShkLabel}
+                            onChange={e => setEditForm({...editForm, isShkLabel: e.target.checked})}
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Этикетка ШК <span className="text-[10px] font-normal opacity-60">(только штрихкод и название, две на одной)</span></span>
+                            <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">Применяется упрощённый шаблон: только название и штрихкод, без производителя/состава/иконок. На каждой 70×90 мм печатаются ДВЕ одинаковые копии с линией реза посередине — оператор разрезает ножницами и получает две 70×45 мм этикетки.</span>
+                          </div>
+                        </label>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -1601,6 +1617,7 @@ export default function PrintPage() {
                       <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Состав</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap">{selected.composition || "—"}</span></div>
                       <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Доп. текст</span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] italic">{selected.extraText || "—"}</span></div>
                       <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Маркетплейс</span>{selected.isExport ? <span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">МП • на этикетке</span> : <span className="font-semibold text-[var(--theme-text-muted)] leading-none mt-0.5">—</span>}</div>
+                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">ШК этикетка</span>{selected.isShkLabel ? <span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/40 text-cyan-600 dark:text-cyan-400">Только ШК + 2 копии</span> : <span className="font-semibold text-[var(--theme-text-muted)] leading-none mt-0.5">—</span>}</div>
                       <div className="flex flex-col pb-1 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">КБЖУ</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.nutritionalInfo || "—"}</span></div>
                     </>
                   )}
@@ -1866,6 +1883,23 @@ export default function PrintPage() {
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-[var(--theme-text-muted)] uppercase tracking-wider mb-2">Доп. текст <span className="text-[10px] font-normal opacity-60">(обечайка / маркетплейс / БИО)</span></label>
                   <input type="text" className="input-field w-full" placeholder="напр. Обечайка 8 Марта, OZON, RU-BIO-112" value={createForm.extraText || ""} onChange={e => setCreateForm({...createForm, extraText: e.target.value})} />
+                </div>
+
+                {/* ШК — упрощённый шаблон + двойная копия. Совпадает с
+                    чекбоксом в режиме редактирования. */}
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-3 cursor-pointer select-none p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)] hover:border-cyan-500/40 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 accent-cyan-500 cursor-pointer"
+                      checked={!!createForm.isShkLabel}
+                      onChange={e => setCreateForm({...createForm, isShkLabel: e.target.checked})}
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Этикетка ШК <span className="text-[10px] font-normal opacity-60">(только штрихкод и название, две на одной)</span></span>
+                      <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">Применяется упрощённый шаблон: только название и штрихкод, без производителя/состава/иконок. На каждой 70×90 мм печатаются ДВЕ одинаковые копии с линией реза посередине — оператор разрезает ножницами и получает две 70×45 мм этикетки.</span>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>

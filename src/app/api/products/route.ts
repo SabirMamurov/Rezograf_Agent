@@ -132,6 +132,7 @@ export async function POST(req: NextRequest) {
       sponsorText: body.sponsorText || null,
       extraText: body.extraText || null,
       isExport: !!body.isExport,
+      isShkLabel: !!body.isShkLabel,
       templateId: body.templateId || null,
     },
   });
@@ -185,6 +186,9 @@ export async function PATCH(req: NextRequest) {
   // Booleans are handled separately — falsy boolean (false) must NOT become null.
   if ("isExport" in data) {
     updateData.isExport = !!data.isExport;
+  }
+  if ("isShkLabel" in data) {
+    updateData.isShkLabel = !!data.isShkLabel;
   }
   // Normalize barcode on edit too: if operator types 13 digits with '2' prefix
   // → save 14-digit ITF-14 with computed check; if 12 digits → save 13-digit

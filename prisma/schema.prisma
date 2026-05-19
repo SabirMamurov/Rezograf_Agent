@@ -87,6 +87,14 @@ model Product {
   // by scripts/migrate_export_mark.js — operators can also toggle it from
   // the /print inspector edit form.
   isExport        Boolean  @default(false)
+  // ШК-label variant — when true, the renderer uses the stripped-down
+  // "barcode-only" template and prints TWO stacked copies on a single
+  // 70×90 mm sticker with a dashed cut-line at the midpoint. Operators
+  // cut the sticker in half → two 70×45 mm labels per print. Saves the
+  // thermal-printer tape on ВкусВилл / маркетплейс single-item ШК
+  // labels. Also auto-triggered when btwFilePath sits under a folder
+  // literally called «Единичный ШК» (legacy behavior since v1.3.2).
+  isShkLabel      Boolean  @default(false)
 
   templateId String?
   template   Template? @relation(fields: [templateId], references: [id])

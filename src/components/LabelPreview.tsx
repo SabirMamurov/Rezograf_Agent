@@ -19,6 +19,7 @@ interface Product {
   extraText?: string | null;
   btwFilePath?: string | null;
   isExport?: boolean | null;
+  isShkLabel?: boolean | null;
 }
 
 interface LabelPreviewProps {
@@ -128,17 +129,27 @@ export default function LabelPreview({
     typeof product?.btwFilePath === "string" &&
     /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
-  // ШК (showbox barcode-only) labels: products inside any folder named
-  // "Единичный ШК" use a stripped-down template — title + optional
-  // subtitle + large barcode. Subtitle is taken from product.weight
-  // (re-purposed for these rows).
-  // Keep aligned with the regex in src/app/api/render/route.ts → isShkLabel.
+  // ШК (showbox barcode-only) labels: either the product is explicitly
+  // flagged via the inspector edit form, or its btwFilePath sits under
+  // a folder named «Единичный ШК» (legacy heuristic). The ШК template
+  // renders TWO stacked copies of (title + optional subtitle + barcode)
+  // on one 70×90 mm sticker with a dashed cut-line at the midpoint —
+  // operator scissors-splits it into two 70×45 mm labels to save tape.
+  // Keep aligned with route.ts → isShkLabel.
   const isShkLabel =
-    typeof product?.btwFilePath === "string" &&
-    /\\Единичный ШК\\/i.test(product.btwFilePath);
+    !!product?.isShkLabel ||
+    (typeof product?.btwFilePath === "string" &&
+      /\\Единичный ШК\\/i.test(product.btwFilePath));
   if (isShkLabel) {
     const rawSubtitle = (product?.weight || "").trim();
     const title = product?.name || "";
+    // 14-digit ITF-14 codes: SVG comes from /api/barcode?...&separateText=1
+    // (bars only) and the digits are rendered as plain HTML below the
+    // bars in big letter-spaced font for thermal-wear resistance. Mirror
+    // the same calculation /print uses (see "useSeparateDigits" further
+    // down in this file) so preview = print.
+    const shkDigitOnly = (product?.barcodeEan13 || "").replace(/\D/g, "");
+    const shkUseSeparateDigits = shkDigitOnly.length === 14;
     // ШК labels conventionally encode the weight inside the title
     // ("...МП/200г"), so showing the separate `weight` subtitle below
     // the name printed the same number twice. Hide the subtitle when
@@ -209,62 +220,111 @@ export default function LabelPreview({
               МП
             </div>
           )}
-          <div
-            style={{
+          {/* Doubled ШК layout — two identical halves stacked vertically
+              with a dashed cut-line between. Operator scissors along
+              the dashes → two 70×45 mm labels per print. Mirrored in
+              buildShkLabelHtml (route.ts). */}
+          {(() => {
+            const halfContent = (
+              <>
+                <div
+                  style={{
+                    fontSize: "32px",
+                    fontWeight: 700,
+                    textAlign: "center",
+                    lineHeight: 1.1,
+                    textDecoration: "underline",
+                    textDecorationThickness: "2px",
+                    textUnderlineOffset: "4px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  {title}
+                </div>
+                {subtitle && (
+                  <div
+                    style={{
+                      fontSize: "22px",
+                      fontWeight: 500,
+                      textAlign: "center",
+                      lineHeight: 1.1,
+                      marginBottom: "16px",
+                    }}
+                  >
+                    {subtitle}
+                  </div>
+                )}
+                <div
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flex: "1 1 auto",
+                    minHeight: 0,
+                  }}
+                >
+                  {barcodeSvg && (
+                    <div
+                      style={{ width: "88%", maxHeight: "100%" }}
+                      dangerouslySetInnerHTML={{ __html: barcodeSvg }}
+                    />
+                  )}
+                </div>
+                {shkUseSeparateDigits && (
+                  <div
+                    style={{
+                      fontFamily: "'Roboto Condensed', sans-serif",
+                      fontVariantNumeric: "tabular-nums",
+                      fontSize: "36px",
+                      fontWeight: 900,
+                      letterSpacing: "1px",
+                      textAlign: "center",
+                      lineHeight: 1,
+                      flex: "0 0 auto",
+                      marginTop: "8px",
+                    }}
+                  >
+                    {shkDigitOnly}
+                  </div>
+                )}
+              </>
+            );
+            const halfStyle: React.CSSProperties = {
               position: "relative",
               zIndex: 1,
-              width: V_WIDTH + "px",
+              flex: "1 1 0",
+              minHeight: 0,
               fontFamily: "'Roboto Condensed', sans-serif",
               fontWeight: 700,
               color: "black",
-              padding: "30px 24px 20px",
+              padding: "24px 24px 18px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "flex-start",
+              justifyContent: "center",
               boxSizing: "border-box",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "44px",
-                fontWeight: 700,
-                textAlign: "center",
-                lineHeight: 1.1,
-                textDecoration: "underline",
-                textDecorationThickness: "3px",
-                textUnderlineOffset: "5px",
-                marginBottom: "14px",
-              }}
-            >
-              {title}
-            </div>
-            {subtitle && (
+            };
+            return (
               <div
                 style={{
-                  fontSize: "32px",
-                  fontWeight: 500,
-                  textAlign: "center",
-                  lineHeight: 1.1,
-                  marginBottom: "30px",
+                  position: "relative",
+                  zIndex: 1,
+                  width: V_WIDTH + "px",
+                  height: V_HEIGHT + "px",
+                  display: "flex",
+                  flexDirection: "column",
+                  boxSizing: "border-box",
                 }}
               >
-                {subtitle}
+                <div style={halfStyle}>{halfContent}</div>
+                {/* No separator — operator wants just the same prod-style
+                    layout duplicated. They've decided to forgo the
+                    cut-line marker. */}
+                <div style={halfStyle}>{halfContent}</div>
               </div>
-            )}
-            <div
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {barcodeSvg && (
-                <div style={{ width: "90%" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
-              )}
-            </div>
-          </div>
+            );
+          })()}
         </div>
       </div>
     );
