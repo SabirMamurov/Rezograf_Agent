@@ -661,6 +661,15 @@ function buildLabelHtml(
   }
 
   const alu41Src = iconDataUris?.alu41 || "/icons/alu41.png";
+  // Per-product overrides: hide the «41 ALU» recyclable-code icon on
+  // specific stickers. Operator request — for these SKUs the physical
+  // packaging doesn't actually contain aluminium foil, so printing the
+  // 41 ALU mark is misleading. visibility:hidden keeps the icon's
+  // bounding box so the rest of the icon row stays right-aligned the
+  // same way it does on every other label.
+  // Keep aligned with LabelPreview.tsx.
+  const HIDE_ALU41_FOR_SKUS = new Set(["16756"]);
+  const hideAlu41 = HIDE_ALU41_FOR_SKUS.has(String(product?.sku || ""));
   const eacSrc = iconDataUris?.eac || "/icons/eac.png";
   const forkGlassSrc = iconDataUris?.fork_glass || "/icons/fork_glass.png";
   const pap20Src = iconDataUris?.pap20 || "/icons/pap20.png";
@@ -804,7 +813,7 @@ ${fontStyleBlock}
                of the 320px container (previously centered with ~20px of
                padding on each side). -->
           <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; width: 100%; padding-left: 7px; box-sizing: border-box;">
-            <img src="${alu41Src}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
+            <img src="${alu41Src}" style="height: 48px; width: auto; display: block; object-fit: contain;${hideAlu41 ? " visibility: hidden;" : ""}" />
             <img src="${eacSrc}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
             <img src="${forkGlassSrc}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
             <img src="${pap20Src}" style="height: 48px; width: auto; display: block; object-fit: contain;" />
