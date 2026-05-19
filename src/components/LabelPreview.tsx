@@ -143,13 +143,14 @@ export default function LabelPreview({
   if (isShkLabel) {
     const rawSubtitle = (product?.weight || "").trim();
     const title = product?.name || "";
-    // 14-digit ITF-14 codes: SVG comes from /api/barcode?...&separateText=1
-    // (bars only) and the digits are rendered as plain HTML below the
-    // bars in big letter-spaced font for thermal-wear resistance. Mirror
-    // the same calculation /print uses (see "useSeparateDigits" further
-    // down in this file) so preview = print.
+    // For ШК labels we ALWAYS render the barcode digits as a separate
+    // big-font HTML block below the bars regardless of code length. The
+    // SVG is fetched with separateText=1 (bars only) by /print so the
+    // embedded glyphs don't stretch when we apply preserveAspectRatio
+    // ="none" to the SVG below. Same decision in route.ts and /print
+    // page (search for isShkProduct).
     const shkDigitOnly = (product?.barcodeEan13 || "").replace(/\D/g, "");
-    const shkUseSeparateDigits = shkDigitOnly.length === 14;
+    const shkUseSeparateDigits = shkDigitOnly.length > 0;
     // ШК labels conventionally encode the weight inside the title
     // ("...МП/200г"), so showing the separate `weight` subtitle below
     // the name printed the same number twice. Hide the subtitle when
@@ -229,7 +230,7 @@ export default function LabelPreview({
               <>
                 <div
                   style={{
-                    fontSize: "32px",
+                    fontSize: "38px",
                     fontWeight: 700,
                     textAlign: "center",
                     lineHeight: 1.1,
@@ -244,31 +245,58 @@ export default function LabelPreview({
                 {subtitle && (
                   <div
                     style={{
-                      fontSize: "22px",
+                      fontSize: "24px",
                       fontWeight: 500,
                       textAlign: "center",
                       lineHeight: 1.1,
-                      marginBottom: "16px",
+                      marginBottom: "12px",
                     }}
                   >
                     {subtitle}
                   </div>
                 )}
+                {/* Fixed-height barcode container + preserveAspectRatio=none
+                    injected into the bwip-js SVG so every barcode type (EAN-13,
+                    Code128, ITF-14, EAN-8) renders into the same 140px tall ×
+                    88%-wide rectangle. Bar-to-bar width ratios are preserved
+                    under uniform scaling → scanners still read everything. */}
                 <div
                   style={{
                     width: "100%",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    flex: "1 1 auto",
-                    minHeight: 0,
+                    flex: "0 0 140px",
                   }}
                 >
                   {barcodeSvg && (
-                    <div
-                      style={{ width: "88%", maxHeight: "100%" }}
-                      dangerouslySetInnerHTML={{ __html: barcodeSvg }}
-                    />
+                    <>
+                      {/* Force the inserted bwip-js SVG to fill the 88%×140px
+                          rect — bwip-js outputs viewBox-only SVGs without
+                          width/height attrs, which default to ~300×150 CSS
+                          px instead of filling the parent. */}
+                      <style
+                        dangerouslySetInnerHTML={{
+                          __html: `.shk-barcode-fill > svg { width: 100% !important; height: 100% !important; display: block; }`,
+                        }}
+                      />
+                      <div
+                        className="shk-barcode-fill"
+                        style={{
+                          width: "88%",
+                          height: "100%",
+                          display: "flex",
+                          alignItems: "stretch",
+                          justifyContent: "center",
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: barcodeSvg.replace(
+                            /<svg\s/i,
+                            '<svg preserveAspectRatio="none" ',
+                          ),
+                        }}
+                      />
+                    </>
                   )}
                 </div>
                 {shkUseSeparateDigits && (

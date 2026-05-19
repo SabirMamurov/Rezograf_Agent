@@ -210,7 +210,14 @@ export async function POST(req: NextRequest) {
   // keep their embedded text. Mirrored in print/page.tsx and
   // components/LabelPreview.tsx.
   const digitOnly = (product.barcodeEan13 || "").replace(/\D/g, "");
-  const useSeparateBarcodeDigits = digitOnly.length === 14;
+  // ШК-template products always render the barcode digits as a separate
+  // HTML block below the bars — both halves of the doubled layout get a
+  // uniform big-digit caption regardless of the underlying barcode type,
+  // and the SVG stretches via preserveAspectRatio="none" to fill the
+  // fixed barcode rectangle without dragging the embedded glyphs along.
+  const isShkLabelEarly = !!product?.isShkLabel ||
+    (typeof product?.btwFilePath === "string" && /\\Единичный ШК\\/i.test(product.btwFilePath));
+  const useSeparateBarcodeDigits = isShkLabelEarly || digitOnly.length === 14;
 
   let barcodeSvg = "";
   if (product.barcodeEan13) {
@@ -586,10 +593,11 @@ ${fontStyleBlock}
     z-index: 0;
   }
   .shk-half { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; color: black; }
-  /* Smaller than the v1.3.x single-copy version because each half only
-     gets ~45 mm of vertical room. */
+  /* Title bumped to 38px so the name reads at the same visual weight
+     as the digits below the barcode (was 32px — operator felt the text
+     was too small relative to the barcode). */
   .shk-title {
-    font-size: 32px;
+    font-size: 38px;
     font-weight: 700;
     text-align: center;
     line-height: 1.1;
@@ -599,22 +607,27 @@ ${fontStyleBlock}
     margin-bottom: 8px;
   }
   .shk-subtitle {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 500;
     text-align: center;
     line-height: 1.1;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
+  /* Fixed barcode height (140px per half) → every label type renders
+     in the same vertical envelope regardless of natural aspect ratio.
+     Combined with preserveAspectRatio="none" on the SVG (injected on
+     the wire just below), EAN-13 / Code128 / ITF-14 / EAN-8 all fill
+     the same rectangle. Bar-to-bar width ratios are preserved under
+     uniform scaling, so scanners read all variants correctly. */
   .shk-barcode {
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 0 0 140px;
   }
-  .shk-barcode > div { width: 88%; max-height: 100%; }
-  .shk-barcode svg { width: 100%; height: 100%; max-height: 100%; }
+  .shk-barcode > div { width: 88%; height: 100%; display: flex; align-items: stretch; justify-content: center; }
+  .shk-barcode svg { width: 100%; height: 100%; display: block; }
   /* Human-readable digits for 14-digit ITF-14 codes (the SVG was
      fetched with separateText=1 → bars only). Sized to roughly match
      the prod single-version look — big enough that the warehouse can
@@ -647,7 +660,7 @@ ${fontStyleBlock}
         <div class="shk-title">${escapeHtml(title)}</div>
         ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         <div class="shk-barcode">
-          ${barcodeSvg ? `<div>${barcodeSvg}</div>` : ""}
+          ${barcodeSvg ? `<div>${barcodeSvg.replace(/<svg\s/i, '<svg preserveAspectRatio="none" ')}</div>` : ""}
         </div>
         ${separateBarcodeDigits ? `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>` : ""}
       </div>
@@ -657,7 +670,7 @@ ${fontStyleBlock}
         <div class="shk-title">${escapeHtml(title)}</div>
         ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         <div class="shk-barcode">
-          ${barcodeSvg ? `<div>${barcodeSvg}</div>` : ""}
+          ${barcodeSvg ? `<div>${barcodeSvg.replace(/<svg\s/i, '<svg preserveAspectRatio="none" ')}</div>` : ""}
         </div>
         ${separateBarcodeDigits ? `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>` : ""}
       </div>

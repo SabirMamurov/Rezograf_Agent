@@ -438,7 +438,15 @@ export default function PrintPage() {
       return;
     }
     const digitOnly = (selected.barcodeEan13 || "").replace(/\D/g, "");
-    const useSeparateDigits = digitOnly.length === 14;
+    // ШК-template products force separateText=1 regardless of barcode
+    // length — LabelPreview's ШК branch always renders digits as a big
+    // HTML block below the bars and stretches the SVG with
+    // preserveAspectRatio="none". If we fetched the SVG with embedded
+    // text for those, the embedded glyphs would stretch too. Keep
+    // aligned with the same decision in /api/render/route.ts.
+    const isShkProduct = !!selected.isShkLabel ||
+      (typeof selected.btwFilePath === "string" && /\\Единичный ШК\\/i.test(selected.btwFilePath));
+    const useSeparateDigits = isShkProduct || digitOnly.length === 14;
     const url = `/api/barcode?code=${selected.barcodeEan13}${useSeparateDigits ? "&separateText=1" : ""}`;
     fetch(url)
       .then((r) => r.text())
