@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import LabelPreview from "@/components/LabelPreview";
+import { useAdmin } from "@/components/AdminProvider";
 
 const FolderIcon = ({ className = "w-5 h-5 inline-block" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
@@ -134,6 +135,7 @@ function DragHandle({
 
 export default function PrintPage() {
   const [query, setQuery] = useState("");
+  const { isAdmin, openPrompt } = useAdmin();
   const [currentPath, _setCurrentPath] = useState<string>("");
 
   const setCurrentPath = useCallback((newPath: string | ((prev: string) => string)) => {
@@ -1216,24 +1218,40 @@ export default function PrintPage() {
         {/* Left pane: Explorer Table */}
         <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden bg-[var(--theme-overlay)] m-4 mr-2 rounded-2xl border border-[var(--theme-border)] flex flex-col relative backdrop-blur-md shadow-inner">
           <div className="px-5 py-3 border-b border-[var(--theme-border)] flex gap-3 text-sm bg-[var(--color-surface-panel)]/80 sticky top-0 z-20 backdrop-blur-xl">
-            <button onClick={() => { setIsCreatingLabel(true); setCreateForm({}); }} className="py-2 px-4 shadow-[0_0_15px_rgba(99,102,241,0.2)] text-[11.5px] font-bold uppercase tracking-wide bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-400 hover:to-indigo-500 rounded-xl transition-all border border-indigo-400/50 cursor-pointer flex items-center gap-2">
-              ➕ Создать этикетку
-            </button>
-            <button onClick={() => setIsCreatingFolder(true)} className="py-2 px-4 text-[11px] font-bold uppercase tracking-wide bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] rounded-xl shadow-sm transition-all border border-[var(--theme-border)] cursor-pointer flex items-center gap-2">
-              <FolderIcon className="w-3.5 h-3.5 mr-1" /> Создать папку
-            </button>
-            {/* Rename — visible only when the operator is INSIDE a folder
-                (currentPath non-empty). Targets the currently-opened folder
-                leaf. Lives next to «Создать папку» rather than in the
-                inspector because it's a folder-level action, not a
-                product-level one. */}
-            {currentPath && (
+            {/* Creation actions are admin-only. Operators see a hint that opens
+                the password prompt. Keep SOMETHING here so the toolbar keeps its
+                ~53px height — the thead below is `sticky top-[53px]`. */}
+            {isAdmin ? (
+              <>
+                <button onClick={() => { setIsCreatingLabel(true); setCreateForm({}); }} className="py-2 px-4 shadow-[0_0_15px_rgba(99,102,241,0.2)] text-[11.5px] font-bold uppercase tracking-wide bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-400 hover:to-indigo-500 rounded-xl transition-all border border-indigo-400/50 cursor-pointer flex items-center gap-2">
+                  ➕ Создать этикетку
+                </button>
+                <button onClick={() => setIsCreatingFolder(true)} className="py-2 px-4 text-[11px] font-bold uppercase tracking-wide bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] rounded-xl shadow-sm transition-all border border-[var(--theme-border)] cursor-pointer flex items-center gap-2">
+                  <FolderIcon className="w-3.5 h-3.5 mr-1" /> Создать папку
+                </button>
+                {/* Rename — visible only when the operator is INSIDE a folder
+                    (currentPath non-empty). Targets the currently-opened folder
+                    leaf. Lives next to «Создать папку» rather than in the
+                    inspector because it's a folder-level action, not a
+                    product-level one. */}
+                {currentPath && (
+                  <button
+                    onClick={openRenameFolderModal}
+                    title={`Переименовать «${currentPath.split(/[\\/]/).pop()}»`}
+                    className="py-2 px-4 text-[11px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 rounded-xl shadow-sm transition-all border border-amber-500/30 cursor-pointer flex items-center gap-2"
+                  >
+                    ✎ Переименовать папку
+                  </button>
+                )}
+              </>
+            ) : (
               <button
-                onClick={openRenameFolderModal}
-                title={`Переименовать «${currentPath.split(/[\\/]/).pop()}»`}
-                className="py-2 px-4 text-[11px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 rounded-xl shadow-sm transition-all border border-amber-500/30 cursor-pointer flex items-center gap-2"
+                onClick={openPrompt}
+                title="Ввести пароль, чтобы редактировать"
+                className="py-2 px-4 text-[11px] font-semibold tracking-wide bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] hover:bg-indigo-500/10 hover:text-indigo-500 rounded-xl border border-[var(--theme-border)] hover:border-indigo-500/30 transition-all cursor-pointer flex items-center gap-2"
               >
-                ✎ Переименовать папку
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Режим просмотра — нажмите, чтобы редактировать
               </button>
             )}
           </div>
@@ -1409,33 +1427,39 @@ export default function PrintPage() {
                         </button>
                       );
                     })()}
-                    <button onClick={openMoveFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
-                      📦 Переместить
-                    </button>
-                    <button onClick={openDuplicateFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-cyan-500/20 cursor-pointer flex items-center justify-center gap-1.5">
-                      📋 Дублировать
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!selected) return;
-                        setConfirmDelete({
-                          kind: "file",
-                          title: selected.name || "(без названия)",
-                          subtitle: selected.btwFilePath
-                            ? `Файл: ${selected.btwFilePath.split(/[\\/]/).pop()}`
-                            : undefined,
-                          onConfirm: handleDeleteFile,
-                        });
-                      }}
-                      disabled={deletingItem}
-                      className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    >
-                      🗑️ Удалить
-                    </button>
-                    <button onClick={startEdit} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      Редактировать
-                    </button>
+                    {/* Mutating actions — admin only. «К товару» above is just
+                        navigation, so it stays available to operators. */}
+                    {isAdmin && (
+                      <>
+                        <button onClick={openMoveFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                          📦 Переместить
+                        </button>
+                        <button onClick={openDuplicateFolder} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-cyan-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                          📋 Дублировать
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!selected) return;
+                            setConfirmDelete({
+                              kind: "file",
+                              title: selected.name || "(без названия)",
+                              subtitle: selected.btwFilePath
+                                ? `Файл: ${selected.btwFilePath.split(/[\\/]/).pop()}`
+                                : undefined,
+                              onConfirm: handleDeleteFile,
+                            });
+                          }}
+                          disabled={deletingItem}
+                          className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          🗑️ Удалить
+                        </button>
+                        <button onClick={startEdit} className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-[var(--theme-overlay)] text-[var(--theme-text)] hover:bg-[var(--theme-overlay-hover)] border border-[var(--theme-border)] rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          Редактировать
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
@@ -1618,17 +1642,43 @@ export default function PrintPage() {
                           </div>
                         );
                       })()}
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Артикул{selected.sku2 ? " / Артикул 2" : ""}</span><span className="font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded tracking-widest text-[11px]">{[selected.sku, selected.sku2].filter(Boolean).join(" / ") || "—"}</span></div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Штрихкод</span><span className="font-mono text-[var(--theme-text)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] px-2 py-0.5 rounded tracking-wider text-[11px]">{selected.barcodeEan13 || "—"}</span></div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Масса</span><span className="font-semibold text-[var(--theme-text)]">{selected.weight || "—"}</span></div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs" title="Печатается на этикетке вместо или рядом с массой (например, «9 шт»)">Количество</span><span className="font-semibold text-[var(--theme-text)]">{selected.quantity || "—"}</span></div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Стандарт</span><span className="font-semibold text-[var(--theme-text)] leading-none mt-0.5">{selected.certCode || "—"}</span></div>
-                      <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Срок и условия </span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.storageCond || "—"}</span></div>
-                      <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Состав</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap">{selected.composition || "—"}</span></div>
-                      <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Доп. текст</span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] italic">{selected.extraText || "—"}</span></div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Маркетплейс</span>{selected.isExport ? <span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">МП • на этикетке</span> : <span className="font-semibold text-[var(--theme-text-muted)] leading-none mt-0.5">—</span>}</div>
-                      <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">ШК этикетка</span>{selected.isShkLabel ? <span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/40 text-cyan-600 dark:text-cyan-400">Только ШК + 2 копии</span> : <span className="font-semibold text-[var(--theme-text-muted)] leading-none mt-0.5">—</span>}</div>
-                      <div className="flex flex-col pb-1 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">КБЖУ</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.nutritionalInfo || "—"}</span></div>
+                      {/* Read-only inspector shows ONLY fields that have a
+                          value. Empty ones (would render "—") are hidden so the
+                          operator sees just the real data. The EDIT form still
+                          lists every field so they can be filled in. */}
+                      {(selected.sku || selected.sku2) && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Артикул{selected.sku2 ? " / Артикул 2" : ""}</span><span className="font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded tracking-widest text-[11px]">{[selected.sku, selected.sku2].filter(Boolean).join(" / ")}</span></div>
+                      )}
+                      {selected.barcodeEan13 && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mt-1">Штрихкод</span><span className="font-mono text-[var(--theme-text)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] px-2 py-0.5 rounded tracking-wider text-[11px]">{selected.barcodeEan13}</span></div>
+                      )}
+                      {selected.weight && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Масса</span><span className="font-semibold text-[var(--theme-text)]">{selected.weight}</span></div>
+                      )}
+                      {selected.quantity && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs" title="Печатается на этикетке вместо или рядом с массой (например, «9 шт»)">Количество</span><span className="font-semibold text-[var(--theme-text)]">{selected.quantity}</span></div>
+                      )}
+                      {selected.certCode && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Стандарт</span><span className="font-semibold text-[var(--theme-text)] leading-none mt-0.5">{selected.certCode}</span></div>
+                      )}
+                      {selected.storageCond && (
+                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Срок и условия </span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.storageCond}</span></div>
+                      )}
+                      {selected.composition && (
+                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Состав</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap">{selected.composition}</span></div>
+                      )}
+                      {selected.extraText && (
+                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Доп. текст</span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] italic">{selected.extraText}</span></div>
+                      )}
+                      {selected.isExport && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Маркетплейс</span><span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">МП • на этикетке</span></div>
+                      )}
+                      {selected.isShkLabel && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">ШК этикетка</span><span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/40 text-cyan-600 dark:text-cyan-400">Только ШК + 2 копии</span></div>
+                      )}
+                      {selected.nutritionalInfo && (
+                        <div className="flex flex-col pb-1 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">КБЖУ</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.nutritionalInfo}</span></div>
+                      )}
                     </>
                   )}
                 </div>
@@ -1770,7 +1820,7 @@ export default function PrintPage() {
               <p className="text-[var(--theme-text-muted)] text-sm max-w-[280px] mx-auto leading-relaxed mb-6">
                 Вы можете выбрать нужный артикул слева или удалить текущую открытую папку вместе со всем её содержимым.
               </p>
-              {currentPath !== "" && (
+              {currentPath !== "" && isAdmin && (
                 <div className="flex gap-2">
                   <button onClick={openMoveFolderModal} className="py-2.5 px-4 shadow-[0_4px_15px_rgba(99,102,241,0.1)] text-[11px] font-bold uppercase tracking-wide bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-2">
                     📦 Переместить папку

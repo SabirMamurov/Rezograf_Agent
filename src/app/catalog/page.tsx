@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useAdmin } from "@/components/AdminProvider";
 
 /* ───────── Types ───────── */
 interface Product {
@@ -57,6 +58,7 @@ function StatusDot({ filled }: { filled: boolean }) {
 
 /* ═══════════════════════════════════════════════ */
 export default function CatalogPage() {
+  const { isAdmin } = useAdmin();
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -305,6 +307,7 @@ export default function CatalogPage() {
                     onEdit={handleEditStable}
                     onDelete={handleDeleteStable}
                     onSetCategory={handleSetCategoryStable}
+                    isAdmin={isAdmin}
                   />
                 ))
               )}
@@ -426,13 +429,13 @@ export default function CatalogPage() {
 
 /* ───── Memoized Row Component ───── */
 const ProductRow = memo(
-  function ProductRow({ p, index, page, onEdit, onDelete, onSetCategory }: any) {
+  function ProductRow({ p, index, page, onEdit, onDelete, onSetCategory, isAdmin }: any) {
     return (
       <tr
-        className="group animate-fade-in cursor-pointer relative"
+        className={`group animate-fade-in relative ${isAdmin ? "cursor-pointer" : ""}`}
         style={{ animationDelay: `${index * 8}ms` }}
-        onClick={() => onEdit(p)}
-        title="Нажмите чтобы редактировать"
+        onClick={isAdmin ? () => onEdit(p) : undefined}
+        title={isAdmin ? "Нажмите чтобы редактировать" : undefined}
       >
         {/* КОЛОНКА 1: Продукт */}
         <td className="py-3 pl-4">
@@ -493,8 +496,9 @@ const ProductRow = memo(
           </div>
         </td>
 
-        {/* КОЛОНКА 4: Действия */}
+        {/* КОЛОНКА 4: Действия — только для админа (режим редактирования) */}
         <td className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
+          {isAdmin && (
           <div className="flex gap-1.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-dim)] bg-[var(--theme-overlay)] border border-[var(--theme-border)] hover:bg-[var(--color-primary)] hover:text-white transition-all shadow-sm"
@@ -511,12 +515,14 @@ const ProductRow = memo(
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
             </button>
           </div>
+          )}
         </td>
       </tr>
     );
   },
-  // Custom equality check: only re-render if product data changes
-  (prev, next) => prev.p === next.p && prev.index === next.index
+  // Custom equality check: only re-render if product data or admin state changes
+  (prev, next) =>
+    prev.p === next.p && prev.index === next.index && prev.isAdmin === next.isAdmin
 );
 
 /* ───── Pagination Button ───── */

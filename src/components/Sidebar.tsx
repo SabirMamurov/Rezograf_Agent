@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAdmin } from "@/components/AdminProvider";
 
 const NAV_ITEMS = [
   {
@@ -41,6 +42,7 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [isLight, setIsLight] = useState(true);
+  const { isAdmin, openPrompt, lock } = useAdmin();
 
   useEffect(() => {
     setIsLight(document.documentElement.classList.contains("light"));
@@ -121,12 +123,38 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* Edit-mode gate. Locked = view-only (search + change date + print).
+          Click to enter the password; once unlocked it stays for ~90 days on
+          this device, so operators never re-type it. */}
+      <div className="px-4 pb-1">
+        {isAdmin ? (
+          <button
+            onClick={lock}
+            title="Выйти из режима редактирования"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all cursor-pointer"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+            Редактирование
+            <span className="ml-auto text-[10px] font-semibold opacity-70 normal-case">выйти</span>
+          </button>
+        ) : (
+          <button
+            onClick={openPrompt}
+            title="Ввести пароль, чтобы редактировать"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide bg-[var(--theme-input-bg)] text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/30 transition-all cursor-pointer"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Только просмотр
+          </button>
+        )}
+      </div>
+
       {/* Footer */}
       <div className="p-4 border-t border-[var(--theme-border)] relative overflow-hidden flex items-center justify-between">
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-surface)] to-transparent pointer-events-none"></div>
         <Link href="/changelog" className={`text-[11px] font-medium tracking-wide relative z-10 flex items-center gap-2 no-underline transition-colors ${pathname === '/changelog' ? 'text-indigo-500' : 'text-[var(--theme-text-muted, var(--color-text-muted))] hover:text-[var(--theme-text)]'}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></span>
-          v1.4.6
+          v1.4.7
         </Link>
         
         {/* Theme Toggle */}

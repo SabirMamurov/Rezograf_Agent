@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import { AdminProvider } from "@/components/AdminProvider";
 
 export const metadata: Metadata = {
   title: "Rezograf — Платформа генерации этикеток",
@@ -46,8 +47,10 @@ export default function RootLayout({
           <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/10 blur-[120px]" />
           <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-600/10 blur-[100px]" />
         </div>
-        <Sidebar />
-        <main className="ml-64 min-h-screen p-8 relative z-10">{children}</main>
+        <AdminProvider>
+          <Sidebar />
+          <main className="ml-64 min-h-screen p-8 relative z-10">{children}</main>
+        </AdminProvider>
       </body>
     </html>
   );

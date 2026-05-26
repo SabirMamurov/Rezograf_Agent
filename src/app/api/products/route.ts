@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeStoredBarcode } from "@/lib/barcodes";
 import { logActivity, diffProduct, summarizeDiff } from "@/lib/activity-log";
+import { isAdminRequest } from "@/lib/auth";
+
+// 403 unless the request carries a valid admin cookie. Mutations only.
+const FORBIDDEN = () =>
+  NextResponse.json({ error: "Требуется режим редактирования" }, { status: 403 });
 
 // SQLite's LOWER()/LIKE are ASCII-only — they do NOT lowercase Cyrillic.
 // `LOWER('Кедровая')` returns `'Кедровая'` unchanged, so a SQL substring
@@ -111,6 +116,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/products — create a new product
 export async function POST(req: NextRequest) {
+  if (!isAdminRequest(req)) return FORBIDDEN();
   const body = await req.json();
   const product = await prisma.product.create({
     data: {
@@ -149,6 +155,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/products — update a product by id (inline edit)
 export async function PATCH(req: NextRequest) {
+  if (!isAdminRequest(req)) return FORBIDDEN();
   const body = await req.json();
   const { id, ...data } = body;
 
@@ -228,6 +235,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/products — delete a product by id
 export async function DELETE(req: NextRequest) {
+  if (!isAdminRequest(req)) return FORBIDDEN();
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
 

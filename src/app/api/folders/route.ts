@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/lib/activity-log";
+import { isAdminRequest } from "@/lib/auth";
+
+// 403 unless the request carries a valid admin cookie. Mutations only (PATCH/DELETE).
+const FORBIDDEN = () =>
+  NextResponse.json({ error: "Требуется режим редактирования" }, { status: 403 });
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -88,6 +93,7 @@ export async function GET(req: NextRequest) {
 // product whose path begins with the source prefix; only the new prefix
 // differs. The same collision / loop checks apply either way.
 export async function PATCH(req: NextRequest) {
+  if (!isAdminRequest(req)) return FORBIDDEN();
   let body: { source?: string; target?: string; newName?: string };
   try {
     body = await req.json();
@@ -226,6 +232,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!isAdminRequest(req)) return FORBIDDEN();
   const { searchParams } = new URL(req.url);
   const path = searchParams.get("path");
   
