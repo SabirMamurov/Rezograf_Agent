@@ -1243,16 +1243,16 @@ export default function PrintPage() {
                 <th className="px-5 py-3 text-left text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest w-[70%]">Имя</th>
                 <th className="px-5 py-3 text-left text-[10px] font-bold text-[var(--theme-text-muted)] uppercase tracking-widest w-[30%] truncate">Артикул</th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--theme-border)]">
-              
+              {/* «На уровень вверх» lives in <thead> (not tbody) so it stays
+                  pinned with the column header when the list scrolls — the
+                  whole thead is sticky. Keeps drag-drop-to-parent + dbl-click. */}
               {currentPath !== "" && (
-                <tr 
+                <tr
                   onDoubleClick={() => {
                      const parts = currentPath.split(/[/\\]/).filter(Boolean);
                      parts.pop();
                      setCurrentPath(parts.join('\\'));
-                  }} 
+                  }}
                   onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("bg-indigo-500/20"); }}
                   onDragLeave={(e) => e.currentTarget.classList.remove("bg-indigo-500/20")}
                   onDrop={(e) => {
@@ -1267,11 +1267,13 @@ export default function PrintPage() {
                   }}
                   className="hover:bg-[var(--theme-overlay)] cursor-pointer transition-colors group select-none"
                 >
-                  <td colSpan={2} className="px-5 py-2 font-semibold text-indigo-400 group-hover:text-indigo-300">
+                  <td colSpan={2} className="px-5 py-2 font-semibold text-indigo-400 group-hover:text-indigo-300 border-t border-[var(--theme-border)]">
                     <span className="mr-3 opacity-80 inline-flex items-center"><BackFolderIcon className="w-5 h-5"/></span> На уровень вверх
                   </td>
                 </tr>
               )}
+            </thead>
+            <tbody className="divide-y divide-[var(--theme-border)]">
 
               {loading && (
                 <tr><td colSpan={2} className="p-10 text-center"><div className="spinner mx-auto" /></td></tr>
