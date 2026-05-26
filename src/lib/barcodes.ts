@@ -1,4 +1,5 @@
 import bwipjs from "bwip-js";
+import sharp from "sharp";
 
 /**
  * Calculate EAN-13 check digit from the first 12 digits.
@@ -252,6 +253,86 @@ export async function generateDataMatrixSvg(data: string): Promise<string> {
     width: 12,
   });
   return svg;
+}
+
+/**
+ * Pixel-perfect barcode bitmap for the thermal printer.
+ *
+ * The label pipeline screenshots the whole label and downscales it to 559×719
+ * with a fractional factor — that makes the barcode module a fractional pixel
+ * (~2.4px), and nearest-neighbour resize then renders bars at uneven widths
+ * (1–6px) so the narrowest bars merge/drop and scanners struggle. Instead we
+ * render the barcode SEPARATELY here with an INTEGER module (bwip-js scale=M is
+ * exactly M px per module) and the caller composites it onto the final bitmap
+ * untouched, so bars stay perfectly uniform.
+ *
+ * Returns a pure black/white PNG exactly targetWidthPx × targetHeightPx: bars
+ * centered, white quiet zones on each side. null if bwip-js can't encode it
+ * (caller falls back to the stretched-SVG path).
+ */
+export async function generateBarcodeBitmap(
+  code: string,
+  targetWidthPx: number,
+  targetHeightPx: number,
+  includeText: boolean = true,
+): Promise<{ buffer: Buffer; width: number; height: number } | null> {
+  if (!(targetWidthPx > 0) || !(targetHeightPx > 0)) return null;
+  const { code: normalizedCode, type } = normalizeBarcode(code);
+  const bcidByType: Record<string, string> = {
+    itf14: "interleaved2of5",
+    ean13: "ean13",
+    ean8: "ean8",
+    code128: "code128",
+  };
+  const bcid = bcidByType[type] || "code128";
+
+  // Largest integer module (px/module) that fits the target width with a
+  // 10-module quiet zone each side. Bigger module = more robust scan.
+  let chosen: { png: Buffer; barW: number } | null = null;
+  for (let M = 5; M >= 2; M--) {
+    try {
+      const png = (await (bwipjs as unknown as {
+        toBuffer: (o: Record<string, unknown>) => Promise<Buffer>;
+      }).toBuffer({
+        bcid,
+        text: normalizedCode,
+        scale: M,
+        height: 10,
+        includetext: includeText,
+        textxalign: "center",
+        paddingwidth: 0,
+        paddingheight: 0,
+      }));
+      const meta = await sharp(png).metadata();
+      const barW = meta.width || 0;
+      if (barW > 0 && barW + 2 * (10 * M) <= targetWidthPx) {
+        chosen = { png, barW };
+        break;
+      }
+      if (M === 2 && barW > 0 && barW <= targetWidthPx) chosen = { png, barW };
+    } catch {
+      // bwip-js refuses some codes at some scales (e.g. non-standard EAN check
+      // digit) — try a smaller module; null return lets the SVG path handle it.
+    }
+  }
+  if (!chosen) return null;
+
+  // Binarize, stretch bars vertically to target height (width unchanged → the
+  // module stays an integer number of px), then pad white quiet zones to width.
+  const bars = await sharp(chosen.png)
+    .flatten({ background: "#ffffff" })
+    .grayscale()
+    .threshold(120)
+    .resize(chosen.barW, targetHeightPx, { kernel: "nearest", fit: "fill" })
+    .toBuffer();
+  const totalQuiet = Math.max(0, targetWidthPx - chosen.barW);
+  const left = Math.floor(totalQuiet / 2);
+  const right = totalQuiet - left;
+  const buffer = await sharp(bars)
+    .extend({ left, right, top: 0, bottom: 0, background: "#ffffff" })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+  return { buffer, width: targetWidthPx, height: targetHeightPx };
 }
 
 export { normalizeBarcode, calcEan13CheckDigit };

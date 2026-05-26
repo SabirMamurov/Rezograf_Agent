@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateBarcodeSvg } from "@/lib/barcodes";
+import { generateBarcodeSvg, generateBarcodeBitmap } from "@/lib/barcodes";
 import { computeSkuLayout } from "@/lib/sku-layout";
 import puppeteer from "puppeteer";
 import sharp from "sharp";
@@ -380,6 +380,19 @@ export async function POST(req: NextRequest) {
       // this as PNG over CDP; sharp takes the raw buffer and does the
       // threshold + nearest-neighbor downsample in native C++ (~30× faster
       // than the old JS pixel-loop round-trip via Canvas).
+      // Measure the barcode area(s) in clip CSS px BEFORE the screenshot so we
+      // can replace them with a pixel-perfect bitmap afterwards. ×(targetW/clipW)
+      // converts to final-bitmap px. Covers the normal label (.barcode-fill)
+      // and the ШК double layout (.shk-barcode-fill, two boxes).
+      const barcodeBoxes = await page.evaluate(() => {
+        return Array.from(
+          document.querySelectorAll(".barcode-fill, .shk-barcode-fill"),
+        ).map((el) => {
+          const r = (el as HTMLElement).getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height };
+        });
+      });
+
       const screenshotBuffer = await page.screenshot({
         type: "png",
         clip: { x: 0, y: 0, width: clipW, height: clipH },
@@ -393,12 +406,60 @@ export async function POST(req: NextRequest) {
       // ship smooth gray watermark too, but lanczos resize spilled
       // antialiased edges around the body text and the thermal driver
       // dithered them as fuzzy halos. CLAUDE.md predicted exactly this.
-      const monoPngBuffer = await sharp(screenshotBuffer)
+      let monoPngBuffer = await sharp(screenshotBuffer)
         .grayscale()
         .threshold(120)
         .resize(targetW, targetH, { kernel: "nearest", fit: "fill" })
         .png({ compressionLevel: 9 })
         .toBuffer();
+
+      // ── Pixel-perfect barcode overlay ──
+      // The screenshot+downscale renders the barcode with a fractional module
+      // (~2.4px) → bars come out at uneven widths (1–6px), the narrowest merge
+      // or drop, and warehouse scanners struggle. Re-render each barcode with
+      // an INTEGER module (generateBarcodeBitmap) and composite it over its
+      // measured box — erasing the fractional original underneath with white
+      // first — so the printed bars are perfectly uniform.
+      //
+      // TEST ROLLOUT (v1.4.8): applied ONLY to labels sitting DIRECTLY in
+      // «не используются\Цех ПЦО» (NOT its subfolders, NOT any other folder).
+      // The operator is trialling the new barcode there where nobody will
+      // notice; everything else keeps the old render untouched. To roll out
+      // everywhere later, drop `inTestBarcodeFolder &&` from the condition.
+      const TEST_BARCODE_FOLDER = "не используются\\Цех ПЦО";
+      const relForBarcode = (product?.btwFilePath || "").replace(
+        /^C:\\Users\\Пользователь\\Desktop\\extracted_labels\\/,
+        "",
+      );
+      const inTestBarcodeFolder =
+        relForBarcode.startsWith(TEST_BARCODE_FOLDER + "\\") &&
+        !relForBarcode.slice(TEST_BARCODE_FOLDER.length + 1).includes("\\");
+
+      if (inTestBarcodeFolder && product.barcodeEan13 && barcodeBoxes.length > 0) {
+        const sx = targetW / clipW;
+        const sy = targetH / clipH;
+        const overlays: sharp.OverlayOptions[] = [];
+        for (const box of barcodeBoxes) {
+          const xf = Math.round(box.x * sx);
+          const yf = Math.round(box.y * sy);
+          const wf = Math.round(box.w * sx);
+          const hf = Math.round(box.h * sy);
+          if (wf < 40 || hf < 10 || xf < 0 || yf < 0 || xf + wf > targetW || yf + hf > targetH) continue;
+          const bmp = await generateBarcodeBitmap(product.barcodeEan13, wf, hf, !useSeparateBarcodeDigits);
+          if (!bmp) continue;
+          const whiteRect = await sharp({
+            create: { width: wf, height: hf, channels: 3, background: "#ffffff" },
+          }).png().toBuffer();
+          overlays.push({ input: whiteRect, left: xf, top: yf });
+          overlays.push({ input: bmp.buffer, left: xf, top: yf });
+        }
+        if (overlays.length > 0) {
+          monoPngBuffer = await sharp(monoPngBuffer)
+            .composite(overlays)
+            .png({ compressionLevel: 9 })
+            .toBuffer();
+        }
+      }
 
       return new NextResponse(new Uint8Array(monoPngBuffer), {
         headers: {
