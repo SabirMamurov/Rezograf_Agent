@@ -286,6 +286,15 @@ export async function generateBarcodeBitmap(
   };
   const bcid = bcidByType[type] || "code128";
 
+  // Reserve a strip at the bottom for the human-readable digits when
+  // includeText. We draw them ourselves as an SVG text node with explicit
+  // letter-spacing — bwip-js's built-in glyphs sit too tight on EAN-13 and
+  // operators read the digits at a glance, so the breathing room matters.
+  const TEXT_AREA = includeText
+    ? Math.min(30, Math.max(18, Math.floor(targetHeightPx * 0.22)))
+    : 0;
+  const BARS_AREA = targetHeightPx - TEXT_AREA;
+
   // Largest integer module (px/module) that fits the target width with a
   // 10-module quiet zone each side. Bigger module = more robust scan.
   let chosen: { png: Buffer; barW: number } | null = null;
@@ -298,8 +307,7 @@ export async function generateBarcodeBitmap(
         text: normalizedCode,
         scale: M,
         height: 10,
-        includetext: includeText,
-        textxalign: "center",
+        includetext: false, // digits are drawn separately below
         paddingwidth: 0,
         paddingheight: 0,
       }));
@@ -317,19 +325,41 @@ export async function generateBarcodeBitmap(
   }
   if (!chosen) return null;
 
-  // Binarize, stretch bars vertically to target height (width unchanged → the
-  // module stays an integer number of px), then pad white quiet zones to width.
+  // Binarize bars and stretch ONLY vertically to BARS_AREA. Width is held at
+  // barW so the module stays exactly M pixels — that's the whole point.
   const bars = await sharp(chosen.png)
     .flatten({ background: "#ffffff" })
     .grayscale()
     .threshold(120)
-    .resize(chosen.barW, targetHeightPx, { kernel: "nearest", fit: "fill" })
+    .resize(chosen.barW, BARS_AREA, { kernel: "nearest", fit: "fill" })
     .toBuffer();
-  const totalQuiet = Math.max(0, targetWidthPx - chosen.barW);
-  const left = Math.floor(totalQuiet / 2);
-  const right = totalQuiet - left;
-  const buffer = await sharp(bars)
-    .extend({ left, right, top: 0, bottom: 0, background: "#ffffff" })
+  const leftBars = Math.floor((targetWidthPx - chosen.barW) / 2);
+
+  const overlays: sharp.OverlayOptions[] = [
+    { input: bars, left: leftBars, top: 0 },
+  ];
+
+  if (includeText) {
+    // Draw the digits as a separate SVG with letter-spacing. sans-serif is
+    // generic so the rasterizer doesn't need a custom font installed on the
+    // host. font-weight 900 + letter-spacing ≈ 18% of the size gives the
+    // "Roboto Condensed black, tabular" feel without the dependency.
+    const fontSize = Math.max(13, Math.floor(TEXT_AREA * 0.78));
+    const letterSpacing = Math.max(2, Math.floor(fontSize * 0.18));
+    const baselineY = Math.floor(TEXT_AREA * 0.82);
+    const svgDigits = `<svg xmlns="http://www.w3.org/2000/svg" width="${targetWidthPx}" height="${TEXT_AREA}"><rect width="100%" height="100%" fill="#ffffff"/><text x="${targetWidthPx / 2}" y="${baselineY}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="900" text-anchor="middle" letter-spacing="${letterSpacing}" fill="#000000">${normalizedCode}</text></svg>`;
+    const digitsPng = await sharp(Buffer.from(svgDigits))
+      .flatten({ background: "#ffffff" })
+      .grayscale()
+      .threshold(120)
+      .toBuffer();
+    overlays.push({ input: digitsPng, left: 0, top: BARS_AREA });
+  }
+
+  const buffer = await sharp({
+    create: { width: targetWidthPx, height: targetHeightPx, channels: 3, background: "#ffffff" },
+  })
+    .composite(overlays)
     .png({ compressionLevel: 9 })
     .toBuffer();
   return { buffer, width: targetWidthPx, height: targetHeightPx };
