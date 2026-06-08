@@ -240,6 +240,21 @@ export async function POST(req: NextRequest) {
   }
   const iconDataUris = loadIconsAsBase64();
   const fontCss = await getEmbeddedFontCss();
+
+  // TEST ROLLOUT folder gate — both the pixel-perfect barcode overlay
+  // (image path, below) AND the wide-digits HTML styling are applied ONLY
+  // to labels sitting DIRECTLY in «не используются\Цех ПЦО». Compute once
+  // here so both consumers see the same boolean. Drop this gate to roll
+  // the new visuals out everywhere.
+  const TEST_BARCODE_FOLDER = "не используются\\Цех ПЦО";
+  const relForBarcode = (product?.btwFilePath || "").replace(
+    /^C:\\Users\\Пользователь\\Desktop\\extracted_labels\\/,
+    "",
+  );
+  const inTestBarcodeFolder =
+    relForBarcode.startsWith(TEST_BARCODE_FOLDER + "\\") &&
+    !relForBarcode.slice(TEST_BARCODE_FOLDER.length + 1).includes("\\");
+
   const labelHtml = buildLabelHtml(
     product,
     barcodeSvg,
@@ -249,7 +264,8 @@ export async function POST(req: NextRequest) {
     expDate,
     iconDataUris,
     fontCss,
-    useSeparateBarcodeDigits ? digitOnly : null
+    useSeparateBarcodeDigits ? digitOnly : null,
+    inTestBarcodeFolder,
   );
 
   // Viewport sized to just fit the label area (widthMm * 10 virtual px wide)
@@ -421,20 +437,10 @@ export async function POST(req: NextRequest) {
       // measured box — erasing the fractional original underneath with white
       // first — so the printed bars are perfectly uniform.
       //
-      // TEST ROLLOUT (v1.4.8): applied ONLY to labels sitting DIRECTLY in
-      // «не используются\Цех ПЦО» (NOT its subfolders, NOT any other folder).
-      // The operator is trialling the new barcode there where nobody will
-      // notice; everything else keeps the old render untouched. To roll out
-      // everywhere later, drop `inTestBarcodeFolder &&` from the condition.
-      const TEST_BARCODE_FOLDER = "не используются\\Цех ПЦО";
-      const relForBarcode = (product?.btwFilePath || "").replace(
-        /^C:\\Users\\Пользователь\\Desktop\\extracted_labels\\/,
-        "",
-      );
-      const inTestBarcodeFolder =
-        relForBarcode.startsWith(TEST_BARCODE_FOLDER + "\\") &&
-        !relForBarcode.slice(TEST_BARCODE_FOLDER.length + 1).includes("\\");
-
+      // Same test-folder gate as the HTML build above — see `inTestBarcodeFolder`
+      // near the top of POST. Only labels DIRECTLY in «не используются\Цех ПЦО»
+      // get the pixel-perfect barcode overlay; everything else keeps the
+      // old render. Drop `inTestBarcodeFolder &&` to roll out everywhere.
       if (inTestBarcodeFolder && product.barcodeEan13 && barcodeBoxes.length > 0) {
         const sx = targetW / clipW;
         const sy = targetH / clipH;
@@ -566,6 +572,10 @@ function buildShkLabelHtml(
   // the two stacked barcode copies — otherwise the operator gets bars
   // with no human-readable digits.
   separateBarcodeDigits?: string | null,
+  // TEST-ROLLOUT flag — see buildLabelHtml for context. When true the
+  // digits block is stretched to full barcode width and the glyphs are
+  // justified so they breathe like on the new EAN-13 layout.
+  wideBarcodeDigits?: boolean,
 ): string {
   const fontStyleBlock = embeddedFontCss && embeddedFontCss.length > 0
     ? `<style>${embeddedFontCss}</style>`
@@ -735,7 +745,7 @@ ${fontStyleBlock}
         <div class="shk-barcode">
           ${barcodeSvg ? `<div>${barcodeSvg.replace(/<svg\s/i, '<svg preserveAspectRatio="none" ')}</div>` : ""}
         </div>
-        ${separateBarcodeDigits ? `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>` : ""}
+        ${separateBarcodeDigits ? (wideBarcodeDigits ? spreadDigitsHtml(separateBarcodeDigits, 36, "width: 88%; align-self: center; margin-top: 8px; flex: 0 0 auto;") : `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>`) : ""}
       </div>
       <!-- Bottom half — identical copy stacked directly below, no
            separator (operator request: just duplicate, no cut-line). -->
@@ -745,7 +755,7 @@ ${fontStyleBlock}
         <div class="shk-barcode">
           ${barcodeSvg ? `<div>${barcodeSvg.replace(/<svg\s/i, '<svg preserveAspectRatio="none" ')}</div>` : ""}
         </div>
-        ${separateBarcodeDigits ? `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>` : ""}
+        ${separateBarcodeDigits ? (wideBarcodeDigits ? spreadDigitsHtml(separateBarcodeDigits, 36, "width: 88%; align-self: center; margin-top: 8px; flex: 0 0 auto;") : `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>`) : ""}
       </div>
     </div>
   </div>
@@ -772,7 +782,12 @@ function buildLabelHtml(
   // When non-null, the SVG above contains only bars and these digits are
   // rendered as wear-resistant HTML below the SVG (test-folder ITF-14
   // wear-resistance experiment).
-  separateBarcodeDigits?: string | null
+  separateBarcodeDigits?: string | null,
+  // TEST-ROLLOUT flag: when true, the human-readable digits block under
+  // the bars is stretched to the FULL width of the barcode container and
+  // justified between glyphs (matches the look of the pixel-perfect EAN-13
+  // digits — see generateBarcodeBitmap). Same gate as the bar overlay.
+  wideBarcodeDigits?: boolean
 ): string {
   const isCompositionDuplicate = (name: string, comp: string | null | undefined) => {
     if (!comp) return true;
@@ -813,6 +828,7 @@ function buildLabelHtml(
       heightMm,
       embeddedFontCss,
       separateBarcodeDigits,
+      wideBarcodeDigits,
     );
   }
 
@@ -949,7 +965,7 @@ ${fontStyleBlock}
              with bigger font + letter-spacing. -->
         <div style="flex: 0 0 calc(50% + 4px); height: 160px; overflow: hidden; padding: 5px 0; box-sizing: border-box; display: flex; flex-direction: column;${separateBarcodeDigits ? " gap: 4px;" : ""}">
            ${barcodeSvg ? `<div class="barcode-fill" style="flex: 1 1 auto; min-height: 0; width: 100%;">${barcodeSvg}</div>` : ''}
-           ${separateBarcodeDigits ? `<div style="font-family: 'Roboto Condensed', sans-serif; font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 900; letter-spacing: 2.5px; text-align: center; line-height: 1; flex: 0 0 auto;">${escapeHtml(separateBarcodeDigits)}</div>` : ''}
+           ${separateBarcodeDigits ? (wideBarcodeDigits ? spreadDigitsHtml(separateBarcodeDigits, 26, "width: 100%; flex: 0 0 auto;") : `<div style="font-family: 'Roboto Condensed', sans-serif; font-variant-numeric: tabular-nums; font-weight: 900; line-height: 1; flex: 0 0 auto; font-size: 22px; letter-spacing: 2.5px; text-align: center;">${escapeHtml(separateBarcodeDigits)}</div>`) : ''}
         </div>
 
         <!-- Right side: Icons + SKU — flex:1 takes whatever the barcode's
@@ -1068,4 +1084,13 @@ function escapeHtml(str: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// Renders barcode digits spread evenly to the full container width via flex
+// space-between (each glyph in its own span). CSS text-align: justify does
+// NOT spread no-space strings like a 14-digit code, so we do it ourselves.
+// `extraStyle` lets each caller pin width/align/margin to its container.
+function spreadDigitsHtml(digits: string, fontSizePx: number, extraStyle: string): string {
+  const spans = Array.from(digits).map((d) => `<span>${escapeHtml(d)}</span>`).join("");
+  return `<div style="display: flex; justify-content: space-between; font-family: 'Roboto Condensed', sans-serif; font-variant-numeric: tabular-nums; font-size: ${fontSizePx}px; font-weight: 900; line-height: 1; ${extraStyle}">${spans}</div>`;
 }
