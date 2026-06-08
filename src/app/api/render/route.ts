@@ -346,11 +346,19 @@ export async function POST(req: NextRequest) {
 
     const contentHeight = await measureContentHeight();
 
+    // ШК (two-up sticker) layout has a fixed bar height per half and must
+    // keep that envelope stable — grow-scaling here would inflate the bars
+    // back up to the old size and undo the operator's «не громоздкие»
+    // request. So for ШК we only ever shrink or fit, never grow.
+    const isShkForScale =
+      !!product?.isShkLabel ||
+      (typeof product?.btwFilePath === "string" && /\\Единичный ШК\\/i.test(product.btwFilePath));
+
     if (contentHeight > vHeight) {
       // Existing shrink-to-fit path
       const shrink = vHeight / contentHeight;
       await applyScaleInDom(shrink);
-    } else if (contentHeight < vHeight * GROW_TRIGGER) {
+    } else if (!isShkForScale && contentHeight < vHeight * GROW_TRIGGER) {
       // Grow path: enough free space to reasonably enlarge text
       const proposed = Math.min(MAX_GROW, (vHeight * SAFETY_MARGIN) / contentHeight);
       // Step 1: narrow + scale (this re-wraps text and may shift heights)
@@ -634,7 +642,7 @@ ${fontStyleBlock}
      digits block (~36px tall) doesn't fall off the sticker edge — even
      with a tall title up top the content now centers higher in the half. */
   .shk-half:last-child {
-    padding-bottom: 40px;
+    padding-bottom: 80px;
   }
   .export-mark {
     position: absolute;
@@ -703,7 +711,7 @@ ${fontStyleBlock}
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 100px;
+    flex: 0 0 30px;
   }
   .shk-barcode > div { width: 88%; height: 100%; display: flex; align-items: stretch; justify-content: center; }
   .shk-barcode svg { width: 100%; height: 100%; display: block; }

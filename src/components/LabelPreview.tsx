@@ -315,7 +315,7 @@ export default function LabelPreview({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    flex: "0 0 100px",
+                    flex: "0 0 30px",
                   }}
                 >
                   {barcodeSvg && (
@@ -407,7 +407,7 @@ export default function LabelPreview({
                     layout duplicated. They've decided to forgo the
                     cut-line marker. Bottom half gets extra padding-bottom
                     so the digits don't fall off the sticker edge. */}
-                <div style={{ ...halfStyle, padding: "24px 24px 40px" }}>{halfContent}</div>
+                <div style={{ ...halfStyle, padding: "24px 24px 80px" }}>{halfContent}</div>
               </div>
             );
           })()}
