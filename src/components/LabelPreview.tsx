@@ -111,18 +111,10 @@ export default function LabelPreview({
   const V_HEIGHT = finalHeightMm * 10; // e.g. 900
   const renderScale = widthPx / V_WIDTH;
 
-  // TEST-ROLLOUT folder gate: wide digits (spread across the barcode
-  // width) are applied ONLY to labels DIRECTLY in «не используются\Цех ПЦО»,
-  // matching the same gate in /api/render/route.ts so the on-screen preview
-  // and the printed bitmap show the same digits style.
-  const _testBcRel = (product?.btwFilePath || "").replace(
-    /^C:\\Users\\Пользователь\\Desktop\\extracted_labels\\/,
-    "",
-  );
-  const _testBcFolder = "не используются\\Цех ПЦО";
-  const inTestBarcodeFolder =
-    _testBcRel.startsWith(_testBcFolder + "\\") &&
-    !_testBcRel.slice(_testBcFolder.length + 1).includes("\\");
+  // Wide barcode digits + pixel-perfect rendering are applied site-wide
+  // as of v1.4.12 — the «Цех ПЦО» trial confirmed reliable scanning, so
+  // the folder gate was dropped.
+  const inTestBarcodeFolder = true;
 
   // Bidirectional auto-fit. Mirror the logic in
   // src/app/api/render/route.ts: shrink when content overflows, GROW when

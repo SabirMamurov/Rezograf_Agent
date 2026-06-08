@@ -241,20 +241,11 @@ export async function POST(req: NextRequest) {
   const iconDataUris = loadIconsAsBase64();
   const fontCss = await getEmbeddedFontCss();
 
-  // TEST ROLLOUT folder gate — both the pixel-perfect barcode overlay
-  // (image path, below) AND the wide-digits HTML styling are applied ONLY
-  // to labels sitting DIRECTLY in «не используются\Цех ПЦО». Compute once
-  // here so both consumers see the same boolean. Drop this gate to roll
-  // the new visuals out everywhere.
-  const TEST_BARCODE_FOLDER = "не используются\\Цех ПЦО";
-  const relForBarcode = (product?.btwFilePath || "").replace(
-    /^C:\\Users\\Пользователь\\Desktop\\extracted_labels\\/,
-    "",
-  );
-  const inTestBarcodeFolder =
-    relForBarcode.startsWith(TEST_BARCODE_FOLDER + "\\") &&
-    !relForBarcode.slice(TEST_BARCODE_FOLDER.length + 1).includes("\\");
-
+  // The pixel-perfect barcode overlay (image path, below) AND the
+  // wide-digits HTML styling are applied to ALL labels site-wide as of
+  // v1.4.12 — the «Цех ПЦО» trial confirmed reliable scanning, so the
+  // folder gate was dropped. (Old gate variable kept as constant `true`
+  // to leave the conditional wiring inside buildLabelHtml untouched.)
   const labelHtml = buildLabelHtml(
     product,
     barcodeSvg,
@@ -265,7 +256,7 @@ export async function POST(req: NextRequest) {
     iconDataUris,
     fontCss,
     useSeparateBarcodeDigits ? digitOnly : null,
-    inTestBarcodeFolder,
+    true,
   );
 
   // Viewport sized to just fit the label area (widthMm * 10 virtual px wide)
@@ -437,11 +428,10 @@ export async function POST(req: NextRequest) {
       // measured box — erasing the fractional original underneath with white
       // first — so the printed bars are perfectly uniform.
       //
-      // Same test-folder gate as the HTML build above — see `inTestBarcodeFolder`
-      // near the top of POST. Only labels DIRECTLY in «не используются\Цех ПЦО»
-      // get the pixel-perfect barcode overlay; everything else keeps the
-      // old render. Drop `inTestBarcodeFolder &&` to roll out everywhere.
-      if (inTestBarcodeFolder && product.barcodeEan13 && barcodeBoxes.length > 0) {
+      // Pixel-perfect overlay is now applied to every label that has a
+      // barcode — the Цех ПЦО trial proved reliable scanning, so the
+      // folder gate was lifted in v1.4.12.
+      if (product.barcodeEan13 && barcodeBoxes.length > 0) {
         const sx = targetW / clipW;
         const sy = targetH / clipH;
         const overlays: sharp.OverlayOptions[] = [];
