@@ -315,7 +315,7 @@ export default function LabelPreview({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    flex: "0 0 140px",
+                    flex: "0 0 100px",
                   }}
                 >
                   {barcodeSvg && (

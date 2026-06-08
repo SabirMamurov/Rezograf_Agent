@@ -697,7 +697,7 @@ ${fontStyleBlock}
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 140px;
+    flex: 0 0 100px;
   }
   .shk-barcode > div { width: 88%; height: 100%; display: flex; align-items: stretch; justify-content: center; }
   .shk-barcode svg { width: 100%; height: 100%; display: block; }
