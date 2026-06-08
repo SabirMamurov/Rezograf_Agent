@@ -405,8 +405,9 @@ export default function LabelPreview({
                 <div style={halfStyle}>{halfContent}</div>
                 {/* No separator — operator wants just the same prod-style
                     layout duplicated. They've decided to forgo the
-                    cut-line marker. */}
-                <div style={halfStyle}>{halfContent}</div>
+                    cut-line marker. Bottom half gets extra padding-bottom
+                    so the digits don't fall off the sticker edge. */}
+                <div style={{ ...halfStyle, padding: "24px 24px 40px" }}>{halfContent}</div>
               </div>
             );
           })()}

@@ -630,6 +630,12 @@ ${fontStyleBlock}
     position: relative;
     z-index: 1;
   }
+  /* Bottom half needs extra padding underneath so the human-readable
+     digits block (~36px tall) doesn't fall off the sticker edge — even
+     with a tall title up top the content now centers higher in the half. */
+  .shk-half:last-child {
+    padding-bottom: 40px;
+  }
   .export-mark {
     position: absolute;
     inset: 0;
