@@ -45,6 +45,40 @@ function isCompositionDuplicate(name: string, composition: string | null | undef
   return false;
 }
 
+// Spreads barcode digits evenly to the container width by putting each
+// glyph in its own span inside a flex space-between row. CSS `text-align:
+// justify` only distributes by whitespace, so a no-space digit string
+// stays clumped — this is the reliable way. Mirrored in route.ts as
+// `spreadDigitsHtml`.
+function SpreadDigits({
+  digits,
+  fontSize,
+  style,
+}: {
+  digits: string;
+  fontSize: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        fontFamily: "'Roboto Condensed', sans-serif",
+        fontVariantNumeric: "tabular-nums",
+        fontSize: `${fontSize}px`,
+        fontWeight: 900,
+        lineHeight: 1,
+        ...style,
+      }}
+    >
+      {Array.from(digits).map((d, i) => (
+        <span key={i}>{d}</span>
+      ))}
+    </div>
+  );
+}
+
 /**
  * WYSIWYG label preview — 70×90mm portrait orientation.
  * Fixed 700×900 virtual canvas scaled via CSS transform.
@@ -76,6 +110,19 @@ export default function LabelPreview({
   const V_WIDTH = finalWidthMm * 10; // e.g. 700
   const V_HEIGHT = finalHeightMm * 10; // e.g. 900
   const renderScale = widthPx / V_WIDTH;
+
+  // TEST-ROLLOUT folder gate: wide digits (spread across the barcode
+  // width) are applied ONLY to labels DIRECTLY in «не используются\Цех ПЦО»,
+  // matching the same gate in /api/render/route.ts so the on-screen preview
+  // and the printed bitmap show the same digits style.
+  const _testBcRel = (product?.btwFilePath || "").replace(
+    /^C:\\Users\\Пользователь\\Desktop\\extracted_labels\\/,
+    "",
+  );
+  const _testBcFolder = "не используются\\Цех ПЦО";
+  const inTestBarcodeFolder =
+    _testBcRel.startsWith(_testBcFolder + "\\") &&
+    !_testBcRel.slice(_testBcFolder.length + 1).includes("\\");
 
   // Bidirectional auto-fit. Mirror the logic in
   // src/app/api/render/route.ts: shrink when content overflows, GROW when
@@ -310,21 +357,29 @@ export default function LabelPreview({
                   )}
                 </div>
                 {shkUseSeparateDigits && (
-                  <div
-                    style={{
-                      fontFamily: "'Roboto Condensed', sans-serif",
-                      fontVariantNumeric: "tabular-nums",
-                      fontSize: "36px",
-                      fontWeight: 900,
-                      letterSpacing: "1px",
-                      textAlign: "center",
-                      lineHeight: 1,
-                      flex: "0 0 auto",
-                      marginTop: "8px",
-                    }}
-                  >
-                    {shkDigitOnly}
-                  </div>
+                  inTestBarcodeFolder ? (
+                    <SpreadDigits
+                      digits={shkDigitOnly}
+                      fontSize={36}
+                      style={{ width: "88%", alignSelf: "center", marginTop: "8px", flex: "0 0 auto" }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        fontFamily: "'Roboto Condensed', sans-serif",
+                        fontVariantNumeric: "tabular-nums",
+                        fontSize: "36px",
+                        fontWeight: 900,
+                        letterSpacing: "1px",
+                        textAlign: "center",
+                        lineHeight: 1,
+                        flex: "0 0 auto",
+                        marginTop: "8px",
+                      }}
+                    >
+                      {shkDigitOnly}
+                    </div>
+                  )
                 )}
               </>
             );
@@ -497,21 +552,29 @@ export default function LabelPreview({
                     <div className="barcode-fill" style={{ flex: "1 1 auto", minHeight: 0, width: "100%" }} dangerouslySetInnerHTML={{ __html: barcodeSvg }} />
                   )}
                   {useSeparateDigits && (
-                    <div style={{
-                      // Tabular-nums + bold + wide letter-spacing keeps the
-                      // digits readable even after partial thermal-print
-                      // erosion on the warehouse.
-                      fontFamily: "'Roboto Condensed', sans-serif",
-                      fontVariantNumeric: "tabular-nums",
-                      fontSize: "22px",
-                      fontWeight: 900,
-                      letterSpacing: "2.5px",
-                      textAlign: "center",
-                      lineHeight: 1,
-                      flex: "0 0 auto",
-                    }}>
-                      {digitOnly}
-                    </div>
+                    inTestBarcodeFolder ? (
+                      <SpreadDigits
+                        digits={digitOnly}
+                        fontSize={26}
+                        style={{ width: "100%", flex: "0 0 auto" }}
+                      />
+                    ) : (
+                      <div style={{
+                        // Tabular-nums + bold + wide letter-spacing keeps the
+                        // digits readable even after partial thermal-print
+                        // erosion on the warehouse.
+                        fontFamily: "'Roboto Condensed', sans-serif",
+                        fontVariantNumeric: "tabular-nums",
+                        fontSize: "22px",
+                        fontWeight: 900,
+                        letterSpacing: "2.5px",
+                        textAlign: "center",
+                        lineHeight: 1,
+                        flex: "0 0 auto",
+                      }}>
+                        {digitOnly}
+                      </div>
+                    )
                   )}
                 </div>
               );
