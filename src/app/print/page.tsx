@@ -189,6 +189,8 @@ export default function PrintPage() {
   // существующий openDuplicateFolder/handleDuplicateFile путь.
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDuplicating, setBulkDuplicating] = useState(false);
+  const [bulkMoving, setBulkMoving] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const toggleBulkSelected = (id: string) => {
     setBulkSelectedIds(prev => {
       const next = new Set(prev);
@@ -952,6 +954,106 @@ export default function PrintPage() {
     await openDuplicateFolder();
   };
 
+  // Массовый перенос: для каждого id формируем новый btwFilePath из
+  // текущего файла + новой папки, через PATCH /api/products. Имя файла
+  // берём из folderProducts (там лежат все товары текущей папки — те же,
+  // что доступны для выделения). Если товар не найден (например пользо-
+  // ватель быстро перешёл по папкам), пропускаем — лучше тихо пропустить
+  // одну строку, чем сломать всю операцию.
+  const openBulkMoveFolder = async () => {
+    if (bulkSelectedIds.size === 0) return;
+    setBulkMoving(true);
+    setIsMovingFile(true);
+    setMoveSearchQuery("");
+    setAllFoldersList([]);
+    try {
+      const res = await fetch("/api/folders?fetchAllPaths=true");
+      if (res.ok) {
+        const data = await res.json();
+        setAllFoldersList(data.folders || []);
+      }
+    } catch (err) {
+      setToast({ message: "Ошибка загрузки папок", type: "error" });
+    }
+  };
+
+  const handleBulkMoveToFolder = async (targetPath: string) => {
+    if (bulkSelectedIds.size === 0) return;
+    setMovingItemUrl(true);
+    const ids = Array.from(bulkSelectedIds);
+    let okCount = 0;
+    let failCount = 0;
+    for (const id of ids) {
+      const prod = folderProducts.find(p => p.id === id);
+      if (!prod) { failCount += 1; continue; }
+      let fileName = prod.name + ".btw";
+      if (prod.btwFilePath) {
+        const parts = prod.btwFilePath.split(/[/\\]/);
+        fileName = parts[parts.length - 1] || fileName;
+      }
+      const newPath = targetPath ? `${targetPath}\\${fileName}` : fileName;
+      const newBtwFilePath = `${basePrefix}${newPath}`;
+      try {
+        const res = await fetch("/api/products", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id,
+            category: targetPath,
+            btwFilePath: newBtwFilePath,
+          }),
+        });
+        if (res.ok) okCount += 1;
+        else failCount += 1;
+      } catch {
+        failCount += 1;
+      }
+    }
+    setMovingItemUrl(false);
+    setIsMovingFile(false);
+    setBulkMoving(false);
+    clearBulkSelected();
+    if (failCount === 0) {
+      setToast({ message: `Перемещено: ${okCount}`, type: "success" });
+    } else {
+      setToast({ message: `Перемещено ${okCount} из ${ids.length}`, type: failCount === ids.length ? "error" : "success" });
+    }
+    setCurrentPath(targetPath);
+  };
+
+  // Массовое удаление: проходим по ids и DELETE'аем каждый. Подтверждение
+  // запрашивается через тот же модальный confirmDelete, что у одиночного
+  // удаления — onConfirm зашивает handleBulkDelete с уже зафиксированным
+  // списком.
+  const handleBulkDelete = async () => {
+    if (bulkSelectedIds.size === 0) return;
+    setBulkDeleting(true);
+    setDeletingItem(true);
+    const ids = Array.from(bulkSelectedIds);
+    let okCount = 0;
+    let failCount = 0;
+    for (const id of ids) {
+      try {
+        const res = await fetch(`/api/products?id=${id}`, { method: "DELETE" });
+        if (res.ok) okCount += 1;
+        else failCount += 1;
+      } catch {
+        failCount += 1;
+      }
+    }
+    setDeletingItem(false);
+    setBulkDeleting(false);
+    clearBulkSelected();
+    if (failCount === 0) {
+      setToast({ message: `Удалено: ${okCount}`, type: "success" });
+    } else {
+      setToast({ message: `Удалено ${okCount} из ${ids.length}`, type: failCount === ids.length ? "error" : "success" });
+    }
+    // Если был открыт товар из удалённых — сбрасываем инспектор.
+    if (selected && ids.includes(selected.id)) setSelected(null);
+    loadFolderData();
+  };
+
   const handleDuplicateFile = async (targetPath: string) => {
     if (!selected) return;
     setDuplicatingItem(true);
@@ -1335,16 +1437,40 @@ export default function PrintPage() {
               Дайт оператору массово копировать без необходимости открывать
               каждый и нажимать «Дублировать». */}
           {isAdmin && bulkSelectedIds.size > 0 && (
-            <div className="sticky top-0 z-20 mx-5 mt-3 mb-2 px-4 py-2.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 backdrop-blur-md flex items-center gap-3 shadow-[0_4px_16px_rgba(6,182,212,0.2)]">
+            <div className="sticky top-0 z-20 mx-5 mt-3 mb-2 px-4 py-2.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 backdrop-blur-md flex items-center gap-2 flex-wrap shadow-[0_4px_16px_rgba(6,182,212,0.2)]">
               <span className="text-[11px] font-bold tracking-wider text-cyan-600 dark:text-cyan-300 uppercase">Выбрано: {bulkSelectedIds.size}</span>
               <div className="flex-1"></div>
               <button
                 onClick={openBulkDuplicateDialog}
                 disabled={bulkDuplicating || duplicatingItem}
                 className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500 text-white hover:bg-cyan-400 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                title="Скопировать выбранные товары в другую папку"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                Дублировать в папку
+                Дублировать
+              </button>
+              <button
+                onClick={openBulkMoveFolder}
+                disabled={bulkMoving || movingItemUrl}
+                className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-indigo-500 text-white hover:bg-indigo-400 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                title="Перенести выбранные товары в другую папку"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/></svg>
+                Переместить
+              </button>
+              <button
+                onClick={() => setConfirmDelete({
+                  kind: "file",
+                  title: `Удалить ${bulkSelectedIds.size} ${bulkSelectedIds.size === 1 ? "этикетку" : "товар(а/ов)"}?`,
+                  subtitle: "Действие необратимо — товары будут удалены из каталога безвозвратно.",
+                  onConfirm: handleBulkDelete,
+                })}
+                disabled={bulkDeleting || deletingItem}
+                className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-rose-500 text-white hover:bg-rose-400 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                title="Удалить выбранные товары"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                Удалить
               </button>
               <button
                 onClick={clearBulkSelected}
@@ -2148,10 +2274,12 @@ export default function PrintPage() {
 
       {/* MOVE LABEL MODAL */}
       {isMovingFile && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsMovingFile(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => { setIsMovingFile(false); setBulkMoving(false); }}>
           <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 w-[500px] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-[var(--theme-text)] mb-4">Переместить этикетку</h2>
-            <div className="text-sm font-semibold text-indigo-500 mb-4 truncate">{selected?.name}</div>
+            <h2 className="text-lg font-bold text-[var(--theme-text)] mb-4">Переместить {bulkMoving ? "выбранные товары" : "этикетку"}</h2>
+            <div className="text-sm font-semibold text-indigo-500 mb-4 truncate">
+              {bulkMoving ? `Выбрано товаров: ${bulkSelectedIds.size}` : selected?.name}
+            </div>
             
             <input 
               type="text" 
@@ -2163,32 +2291,32 @@ export default function PrintPage() {
             />
             
             <div className="flex-1 overflow-y-auto min-h-[50px] bg-[var(--theme-overlay)] border border-[var(--theme-border)] rounded-xl py-2 px-1 mb-4 custom-scrollbar">
-              <button 
+              <button
                 className="w-full text-left px-4 py-3 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer border-b border-transparent hover:border-[var(--theme-border)] font-bold mb-1"
-                onClick={() => handleMoveFile("")}
+                onClick={() => bulkMoving ? handleBulkMoveToFolder("") : handleMoveFile("")}
                 disabled={movingItemUrl}
               >
                  🏠 Корневая директория (без папки)
               </button>
-              
+
               {allFoldersList.filter(f => f.toLowerCase().includes(moveSearchQuery.toLowerCase())).map(f => (
-                <button 
+                <button
                   key={f}
                   className="w-full text-left px-4 py-2.5 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer text-[var(--theme-text)]"
-                  onClick={() => handleMoveFile(f)}
+                  onClick={() => bulkMoving ? handleBulkMoveToFolder(f) : handleMoveFile(f)}
                   disabled={movingItemUrl}
                 >
                   📁 {f}
                 </button>
               ))}
-              
+
               {allFoldersList.filter(f => f.toLowerCase().includes(moveSearchQuery.toLowerCase())).length === 0 && (
                 <div className="text-center py-4 text-[var(--theme-text-muted)] text-sm">Папки не найдены</div>
               )}
             </div>
-            
+
             <div className="flex justify-end pt-2">
-              <button onClick={() => setIsMovingFile(false)} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
+              <button onClick={() => { setIsMovingFile(false); setBulkMoving(false); }} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
             </div>
           </div>
         </div>
