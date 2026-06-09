@@ -824,18 +824,6 @@ function buildLabelHtml(
     !!product?.isShkLabel ||
     (typeof product?.btwFilePath === "string" &&
       /\\Единичный ШК\\/i.test(product.btwFilePath));
-
-  // Точечный фикс сканируемости для ITF-14 артикулов 2497 и 2188.
-  // На стандартном контейнере 50% bbox (~264 px) узковат для bwip-js ITF-14
-  // scale=2 (270 px + quiet zones), composite не применяется → старый SVG-путь,
-  // и при рестеризации Puppeteer/sharp узкие полосы конкретных узоров этих
-  // двух кодов попадают на дробные границы и округляются в 3 px вместо 2 px.
-  // 3 px-полосы ломают Interleaved 2 of 5 (узкая или широкая?), сканер не
-  // читает. Расширение до 60% даёт bbox ≥310 px → composite срабатывает
-  // c целочисленным M=2 → ровные модули {2:48, 6:29} → читается.
-  // Гейт по SKU, чтобы не трогать визуал остальных этикеток.
-  const useWiderBarcode = product?.sku === "2497" || product?.sku === "2188";
-  const barcodeContainerBasis = useWiderBarcode ? "calc(60% + 4px)" : "calc(50% + 4px)";
   if (isShkLabel) {
     return buildShkLabelHtml(
       product,
@@ -979,7 +967,7 @@ ${fontStyleBlock}
              (test-folder ITF-14 wear-resistance experiment), the SVG holds
              only the bars and the digits are rendered as plain HTML below
              with bigger font + letter-spacing. -->
-        <div style="flex: 0 0 ${barcodeContainerBasis}; height: 160px; overflow: hidden; padding: 5px 0; box-sizing: border-box; display: flex; flex-direction: column;${separateBarcodeDigits ? " gap: 4px;" : ""}">
+        <div style="flex: 0 0 calc(60% + 4px); height: 160px; overflow: hidden; padding: 5px 0; box-sizing: border-box; display: flex; flex-direction: column;${separateBarcodeDigits ? " gap: 4px;" : ""}">
            ${barcodeSvg ? `<div class="barcode-fill" style="flex: 1 1 auto; min-height: 0; width: 100%;">${barcodeSvg.replace(/<svg\s/i, '<svg shape-rendering="crispEdges" ')}</div>` : ''}
            ${separateBarcodeDigits ? (wideBarcodeDigits ? spreadDigitsHtml(separateBarcodeDigits, 26, "width: 100%; flex: 0 0 auto;") : `<div style="font-family: 'Roboto Condensed', sans-serif; font-variant-numeric: tabular-nums; font-weight: 900; line-height: 1; flex: 0 0 auto; font-size: 22px; letter-spacing: 2.5px; text-align: center;">${escapeHtml(separateBarcodeDigits)}</div>`) : ''}
         </div>
