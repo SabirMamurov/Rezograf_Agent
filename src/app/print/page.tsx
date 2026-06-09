@@ -188,7 +188,6 @@ export default function PrintPage() {
   // тот же, что и для одиночного — handleBulkDuplicate переиспользует
   // существующий openDuplicateFolder/handleDuplicateFile путь.
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkDuplicating, setBulkDuplicating] = useState(false);
   const [bulkMoving, setBulkMoving] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const toggleBulkSelected = (id: string) => {
@@ -911,49 +910,6 @@ export default function PrintPage() {
     }
   };
 
-  // Массовый дубль: открывает тот же диалог выбора целевой папки, что и
-  // одиночный, но при подтверждении копирует все отмеченные товары. Чтобы
-  // не путать с обычным дублём (где после копии открывается редактор
-  // созданной этикетки), флаг bulkDuplicating меняет ветку в обработчике
-  // выбора папки.
-  const handleBulkDuplicateToFolder = async (targetPath: string) => {
-    if (bulkSelectedIds.size === 0) return;
-    setDuplicatingItem(true);
-    const ids = Array.from(bulkSelectedIds);
-    let okCount = 0;
-    let failCount = 0;
-    for (const id of ids) {
-      try {
-        const res = await fetch("/api/products/duplicate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, targetFolder: targetPath }),
-        });
-        if (res.ok) okCount += 1;
-        else failCount += 1;
-      } catch {
-        failCount += 1;
-      }
-    }
-    setDuplicatingItem(false);
-    setIsDuplicatingFile(false);
-    setBulkDuplicating(false);
-    clearBulkSelected();
-    if (failCount === 0) {
-      setToast({ message: `Дубликаты созданы: ${okCount}`, type: "success" });
-    } else {
-      setToast({ message: `Скопировано ${okCount} из ${ids.length}`, type: failCount === ids.length ? "error" : "success" });
-    }
-    // Прыгнем в целевую папку, чтобы оператор увидел созданные копии.
-    setCurrentPath(targetPath);
-  };
-
-  const openBulkDuplicateDialog = async () => {
-    if (bulkSelectedIds.size === 0) return;
-    setBulkDuplicating(true);
-    await openDuplicateFolder();
-  };
-
   // Массовый перенос: для каждого id формируем новый btwFilePath из
   // текущего файла + новой папки, через PATCH /api/products. Имя файла
   // берём из folderProducts (там лежат все товары текущей папки — те же,
@@ -1433,54 +1389,6 @@ export default function PrintPage() {
               </button>
             )}
           </div>
-          {/* Sticky bulk-action bar: появляется когда в списке отмечены товары.
-              Дайт оператору массово копировать без необходимости открывать
-              каждый и нажимать «Дублировать». */}
-          {isAdmin && bulkSelectedIds.size > 0 && (
-            <div className="sticky top-0 z-20 mx-5 mt-3 mb-2 px-4 py-2.5 rounded-xl border border-cyan-500/40 bg-cyan-500/10 backdrop-blur-md flex items-center gap-2 flex-wrap shadow-[0_4px_16px_rgba(6,182,212,0.2)]">
-              <span className="text-[11px] font-bold tracking-wider text-cyan-600 dark:text-cyan-300 uppercase">Выбрано: {bulkSelectedIds.size}</span>
-              <div className="flex-1"></div>
-              <button
-                onClick={openBulkDuplicateDialog}
-                disabled={bulkDuplicating || duplicatingItem}
-                className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-cyan-500 text-white hover:bg-cyan-400 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-                title="Скопировать выбранные товары в другую папку"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                Дублировать
-              </button>
-              <button
-                onClick={openBulkMoveFolder}
-                disabled={bulkMoving || movingItemUrl}
-                className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-indigo-500 text-white hover:bg-indigo-400 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-                title="Перенести выбранные товары в другую папку"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/></svg>
-                Переместить
-              </button>
-              <button
-                onClick={() => setConfirmDelete({
-                  kind: "file",
-                  title: `Удалить ${bulkSelectedIds.size} ${bulkSelectedIds.size === 1 ? "этикетку" : "товар(а/ов)"}?`,
-                  subtitle: "Действие необратимо — товары будут удалены из каталога безвозвратно.",
-                  onConfirm: handleBulkDelete,
-                })}
-                disabled={bulkDeleting || deletingItem}
-                className="py-1.5 px-3 text-[11px] font-bold tracking-wide uppercase bg-rose-500 text-white hover:bg-rose-400 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-                title="Удалить выбранные товары"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                Удалить
-              </button>
-              <button
-                onClick={clearBulkSelected}
-                className="py-1.5 px-2.5 text-[11px] font-semibold tracking-wide bg-transparent text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] hover:bg-[var(--theme-overlay)] rounded-lg transition-colors cursor-pointer"
-                title="Снять выделение"
-              >
-                Сбросить
-              </button>
-            </div>
-          )}
           <table className="w-full table-fixed divide-y divide-[var(--theme-border)] text-sm">
             <thead className="bg-[var(--color-surface-panel)]/95 sticky top-[53px] z-10 backdrop-blur-xl border-b border-[var(--theme-border)]">
               <tr>
@@ -1600,7 +1508,93 @@ export default function PrintPage() {
 
         {/* Right pane: Preview & Edit */}
         <div className="w-[340px] md:w-[400px] xl:w-[480px] overflow-y-auto bg-[var(--color-surface)] flex-none border-l border-[var(--theme-border)] flex flex-col shadow-[-8px_0_24px_rgba(0,0,0,0.1)] shrink-0 relative bg-[radial-gradient(var(--theme-overlay)_1px,transparent_1px)] [background-size:16px_16px] backdrop-blur-xl z-20">
-          {selected ? (
+          {/* BULK-режим — приоритет над обычным инспектором/заглушкой. Активен
+              когда оператор отметил товары галочками в списке слева. Показ
+              действия и список выбранных, чтобы убрать ошибочно отмеченный
+              можно прямо отсюда. Дублирование сюда специально не вынесено:
+              при переносе или удалении замена данных не требуется, а при
+              массовом дублировании пришлось бы редактировать поля каждой
+              копии (артикул, штрихкод) — это уже точечная работа, а не
+              массовая, и должна делаться через одиночное «Дублировать» из
+              инспектора одного товара. */}
+          {isAdmin && bulkSelectedIds.size > 0 ? (
+            <div className="animate-fade-in p-5 xl:p-6 max-w-full flex flex-col">
+              <div className="flex flex-col gap-3.5 bg-[var(--theme-overlay)] backdrop-blur-md px-4 py-4 rounded-xl border border-cyan-500/40 shadow-[0_4px_12px_rgba(6,182,212,0.15)]">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-bold tracking-wider text-cyan-600 dark:text-cyan-300 uppercase flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    Массовое действие
+                  </div>
+                  <button
+                    onClick={clearBulkSelected}
+                    className="text-[10px] font-bold uppercase tracking-wider text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] px-2 py-1 rounded-md hover:bg-[var(--theme-overlay)] transition-colors cursor-pointer"
+                    title="Снять выделение"
+                  >
+                    Сбросить
+                  </button>
+                </div>
+                <div className="h-px bg-gradient-to-r from-transparent via-[var(--theme-border)] to-transparent"></div>
+                <div className="text-sm text-[var(--theme-text)]">
+                  Выбрано товаров: <span className="font-bold text-cyan-600 dark:text-cyan-300">{bulkSelectedIds.size}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={openBulkMoveFolder}
+                    disabled={bulkMoving || movingItemUrl}
+                    className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wide bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 7h6l2 2h10v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/></svg>
+                    Перенести
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete({
+                      kind: "file",
+                      title: `Удалить ${bulkSelectedIds.size} ${bulkSelectedIds.size === 1 ? "этикетку" : "товар(а/ов)"}?`,
+                      subtitle: "Действие необратимо — товары будут удалены из каталога безвозвратно.",
+                      onConfirm: handleBulkDelete,
+                    })}
+                    disabled={bulkDeleting || deletingItem}
+                    className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wide bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/30 rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                    Удалить
+                  </button>
+                </div>
+              </div>
+
+              {/* Список выбранных товаров: оператор видит, что именно сейчас
+                  попадёт в массовое действие, и может отдельно убрать
+                  ошибочно отмеченный — без необходимости искать его в
+                  большом списке слева. */}
+              <div className="mt-4 bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 bg-[var(--theme-overlay)] border-b border-[var(--theme-border)] text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">Список выбранных</div>
+                <div className="max-h-[480px] overflow-y-auto custom-scrollbar">
+                  {Array.from(bulkSelectedIds).map(id => {
+                    const prod = folderProducts.find(p => p.id === id);
+                    const title = prod
+                      ? (prod.btwFilePath ? prod.btwFilePath.split(/[/\\]/).pop()?.replace('.btw', '') : prod.name)
+                      : `(не найден: ${id.slice(0,8)}…)`;
+                    return (
+                      <div key={id} className="flex items-center justify-between px-4 py-2 border-b border-[var(--theme-border)] last:border-b-0 hover:bg-[var(--theme-overlay)] transition-colors">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <LabelItemIcon className="w-4 h-4 text-emerald-500 shrink-0"/>
+                          <span className="text-xs text-[var(--theme-text)] truncate">{title}</span>
+                          {prod?.sku && <span className="ml-1 text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">{prod.sku}</span>}
+                        </div>
+                        <button
+                          onClick={() => toggleBulkSelected(id)}
+                          className="ml-2 shrink-0 w-6 h-6 rounded-md text-[var(--theme-text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer flex items-center justify-center"
+                          title="Убрать из выбранных"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : selected ? (
             <div className="animate-fade-in p-5 xl:p-6 max-w-full flex flex-col">
 
               {/* Toolbar */}
@@ -2323,17 +2317,13 @@ export default function PrintPage() {
       )}
 
       {isDuplicatingFile && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => { setIsDuplicatingFile(false); setBulkDuplicating(false); }}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsDuplicatingFile(false)}>
           <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 w-[500px] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-[var(--theme-text)] mb-1">Дублировать в папку</h2>
             <div className="text-xs text-[var(--theme-text-muted)] mb-3">
-              {bulkDuplicating
-                ? "Скопирует все выбранные товары со всеми полями в указанную папку."
-                : "Создаст копию товара со всеми полями. После создания вы сразу попадёте в режим редактирования, чтобы поменять артикул."}
+              Создаст копию товара со всеми полями. После создания вы сразу попадёте в режим редактирования, чтобы поменять артикул.
             </div>
-            <div className="text-sm font-semibold text-cyan-500 mb-4 truncate">
-              {bulkDuplicating ? `Выбрано товаров: ${bulkSelectedIds.size}` : selected?.name}
-            </div>
+            <div className="text-sm font-semibold text-cyan-500 mb-4 truncate">{selected?.name}</div>
 
             <input
               type="text"
@@ -2347,7 +2337,7 @@ export default function PrintPage() {
             <div className="flex-1 overflow-y-auto min-h-[50px] bg-[var(--theme-overlay)] border border-[var(--theme-border)] rounded-xl py-2 px-1 mb-4 custom-scrollbar">
               <button
                 className="w-full text-left px-4 py-3 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer border-b border-transparent hover:border-[var(--theme-border)] font-bold mb-1"
-                onClick={() => bulkDuplicating ? handleBulkDuplicateToFolder("") : handleDuplicateFile("")}
+                onClick={() => handleDuplicateFile("")}
                 disabled={duplicatingItem}
               >
                 🏠 Корневая директория (без папки)
@@ -2357,7 +2347,7 @@ export default function PrintPage() {
                 <button
                   key={f}
                   className="w-full text-left px-4 py-2.5 text-sm hover:bg-[var(--theme-input-bg)] rounded-lg transition-colors cursor-pointer text-[var(--theme-text)]"
-                  onClick={() => bulkDuplicating ? handleBulkDuplicateToFolder(f) : handleDuplicateFile(f)}
+                  onClick={() => handleDuplicateFile(f)}
                   disabled={duplicatingItem}
                 >
                   📁 {f}
@@ -2370,7 +2360,7 @@ export default function PrintPage() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <button onClick={() => { setIsDuplicatingFile(false); setBulkDuplicating(false); }} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
+              <button onClick={() => setIsDuplicatingFile(false)} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors">Отмена</button>
             </div>
           </div>
         </div>
