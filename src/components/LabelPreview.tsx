@@ -532,8 +532,11 @@ export default function LabelPreview({
               // src/app/print/page.tsx (barcode fetch).
               const digitOnly = (product?.barcodeEan13 || "").replace(/\D/g, "");
               const useSeparateDigits = digitOnly.length === 14;
+              // Точечный фикс bbox для ITF-14 артикулов 2497 и 2188 — см. /api/render/route.ts.
+              const useWiderBarcode = product?.sku === "2497" || product?.sku === "2188";
+              const barcodeContainerBasis = useWiderBarcode ? "calc(60% + 4px)" : "calc(50% + 4px)";
               return (
-                <div style={{ flex: "0 0 calc(50% + 4px)", height: "160px", overflow: "hidden", padding: "5px 0", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: useSeparateDigits ? "4px" : 0 }}>
+                <div style={{ flex: `0 0 ${barcodeContainerBasis}`, height: "160px", overflow: "hidden", padding: "5px 0", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: useSeparateDigits ? "4px" : 0 }}>
                   {/*
                     bwip-js generates SVGs with only `viewBox`, no width/height
                     attrs. Without explicit dimensions, browsers default the SVG
