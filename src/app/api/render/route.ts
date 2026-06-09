@@ -803,13 +803,21 @@ function buildLabelHtml(
   };
   const showComposition = !isCompositionDuplicate(product.name, product.composition);
 
-  // Manufacturer block is hardcoded by default ("ООО Эко-фабрика…"). Two
-  // folders use the IP Abdualiev legal entity instead: "Цех ПЦО\Орехи\ИП
-  // Абдуалиев" and "МП\ПЦПО". Match by btwFilePath, case-insensitive. Keep
-  // this aligned with src/components/LabelPreview.tsx.
+  // Manufacturer block has two hardcoded variants (ИП Абдуалиев / ООО
+  // «Эко-фабрика»). Priority:
+  // 1) product.manufacturerType explicit value from the inspector editor
+  //    ("abdualiev" | "ekofabrika") — wins over everything.
+  // 2) Legacy auto-detect by btwFilePath for products imported before the
+  //    explicit field existed ("Цех ПЦО\Орехи\ИП Абдуалиев" and
+  //    "МП\ПЦПО" → ИП Абдуалиев; everything else → Эко-фабрика).
+  // Keep aligned with src/components/LabelPreview.tsx.
   const isAbdualievProduct =
-    typeof product?.btwFilePath === "string" &&
-    /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
+    product?.manufacturerType === "abdualiev"
+      ? true
+      : product?.manufacturerType === "ekofabrika"
+        ? false
+        : typeof product?.btwFilePath === "string" &&
+          /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
   // ШК (showbox barcode-only) labels: either the product is explicitly
   // flagged via the `isShkLabel` column (set from the inspector edit

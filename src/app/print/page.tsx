@@ -57,6 +57,7 @@ interface Product {
   isExport: boolean | null;
   isShkLabel: boolean | null;
   manufacturer: string | null;
+  manufacturerType: string | null;
   updatedAt?: string;
   template?: {
     widthMm: number;
@@ -691,6 +692,17 @@ export default function PrintPage() {
       boxWeight: selected.boxWeight || "",
       sponsorText: selected.sponsorText || "",
       manufacturer: selected.manufacturer || "",
+      // Initialise the manufacturer radio. If the product has no explicit
+      // value, fall back to the same auto-detection rule used by the render
+      // route so that opening an Абдуалиев-folder product shows «ИП Абдуалиев»
+      // as pre-selected — otherwise saving would silently flip it to
+      // Эко-фабрика (because that's the default radio bucket).
+      manufacturerType: selected.manufacturerType === "abdualiev" || selected.manufacturerType === "ekofabrika"
+        ? selected.manufacturerType
+        : (typeof selected.btwFilePath === "string" &&
+            /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(selected.btwFilePath))
+          ? "abdualiev"
+          : "ekofabrika",
       extraText: selected.extraText || "",
       isExport: !!selected.isExport,
       isShkLabel: !!selected.isShkLabel,
@@ -1615,6 +1627,38 @@ export default function PrintPage() {
                           </div>
                         </label>
                       </div>
+                      <div>
+                        <div className="p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)]">
+                          <div className="flex flex-col mb-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Производитель</span>
+                            <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">Какой блок «Изготовитель» печатается на этикетке. По умолчанию — Эко-фабрика. Переключите, если товар выпускается под ИП Абдуалиев.</span>
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            <label className={`flex-1 min-w-[140px] flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors ${(!editForm.manufacturerType || editForm.manufacturerType === "ekofabrika") ? "bg-cyan-500/10 border-cyan-500/40 text-[var(--theme-text)]" : "bg-transparent border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-cyan-500/40"}`}>
+                              <input
+                                type="radio"
+                                name="manufacturerType"
+                                value="ekofabrika"
+                                className="w-4 h-4 accent-cyan-500 cursor-pointer"
+                                checked={!editForm.manufacturerType || editForm.manufacturerType === "ekofabrika"}
+                                onChange={() => setEditForm({...editForm, manufacturerType: "ekofabrika"})}
+                              />
+                              <span className="text-xs font-semibold">Эко-фабрика</span>
+                            </label>
+                            <label className={`flex-1 min-w-[140px] flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors ${editForm.manufacturerType === "abdualiev" ? "bg-cyan-500/10 border-cyan-500/40 text-[var(--theme-text)]" : "bg-transparent border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-cyan-500/40"}`}>
+                              <input
+                                type="radio"
+                                name="manufacturerType"
+                                value="abdualiev"
+                                className="w-4 h-4 accent-cyan-500 cursor-pointer"
+                                checked={editForm.manufacturerType === "abdualiev"}
+                                onChange={() => setEditForm({...editForm, manufacturerType: "abdualiev"})}
+                              />
+                              <span className="text-xs font-semibold">ИП Абдуалиев</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -1676,6 +1720,24 @@ export default function PrintPage() {
                       {selected.isShkLabel && (
                         <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">ШК этикетка</span><span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/40 text-cyan-600 dark:text-cyan-400">Только ШК + 2 копии</span></div>
                       )}
+                      {(() => {
+                        // Mirror /api/render/route.ts isAbdualievProduct logic.
+                        const isAbd = selected.manufacturerType === "abdualiev"
+                          ? true
+                          : selected.manufacturerType === "ekofabrika"
+                            ? false
+                            : typeof selected.btwFilePath === "string" &&
+                              /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(selected.btwFilePath);
+                        const isExplicit = selected.manufacturerType === "abdualiev" || selected.manufacturerType === "ekofabrika";
+                        return (
+                          <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1">
+                            <span className="text-[var(--theme-text-muted)] text-xs">Производитель</span>
+                            <span className={`font-bold text-[10px] tracking-wider px-2 py-1 rounded-md ${isAbd ? "bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400" : "bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400"}`}>
+                              {isAbd ? "ИП Абдуалиев" : "Эко-фабрика"}{!isExplicit && <span className="ml-1 opacity-60 font-normal">(авто)</span>}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       {selected.nutritionalInfo && (
                         <div className="flex flex-col pb-1 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">КБЖУ</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.nutritionalInfo}</span></div>
                       )}

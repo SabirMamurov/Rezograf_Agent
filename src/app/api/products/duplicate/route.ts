@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
       nutritionalInfo: source.nutritionalInfo,
       storageCond: source.storageCond,
       manufacturer: source.manufacturer,
+      manufacturerType: source.manufacturerType,
       barcodeEan13: source.barcodeEan13,
       btwFilePath: newBtwFilePath,
       certCode: source.certCode,

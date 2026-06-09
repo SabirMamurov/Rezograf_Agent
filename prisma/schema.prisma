@@ -67,6 +67,13 @@ model Product {
   nutritionalInfo String?
   storageCond     String?
   manufacturer    String?
+  // Какой производитель печатается в блоке «Изготовитель» на этикетке.
+  // null  → автоопределение по btwFilePath (ИП Абдуалиев по двум папкам,
+  //         иначе Эко-фабрика). Сохраняет совместимость со старыми данными.
+  // "abdualiev"  → принудительно ИП Абдуалиев В.Г.
+  // "ekofabrika" → принудительно ООО «Эко-фабрика Сибирский Кедр».
+  // Выставляется из редактора товара и переопределяет автоопределение.
+  manufacturerType String?
   barcodeEan13    String?
   btwFilePath     String?
   certCode        String?

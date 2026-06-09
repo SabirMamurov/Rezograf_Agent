@@ -41,6 +41,7 @@ export async function PUT(
       boxWeight: body.boxWeight !== undefined ? body.boxWeight : undefined,
       sponsorText: body.sponsorText !== undefined ? body.sponsorText : undefined,
       extraText: body.extraText !== undefined ? body.extraText : undefined,
+      manufacturerType: body.manufacturerType !== undefined ? body.manufacturerType : undefined,
       templateId: body.templateId ?? undefined,
     },
   });
