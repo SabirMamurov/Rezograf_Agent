@@ -190,6 +190,15 @@ export default function PrintPage() {
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoving, setBulkMoving] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Лёгкое переименование «имя файла» — единственная операция, разрешённая
+  // без режима редактирования (без пароля). Эндпоинт /api/products/[id]/rename
+  // принимает только новое имя файла и сам же чистит слэши. Доступно всем
+  // ролям: операторам удобно поправлять опечатку, и это не открывает им
+  // полный редактор товара.
+  const [isRenamingFile, setIsRenamingFile] = useState(false);
+  const [renameFileName, setRenameFileName] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
   const toggleBulkSelected = (id: string) => {
     setBulkSelectedIds(prev => {
       const next = new Set(prev);
@@ -839,6 +848,42 @@ export default function PrintPage() {
       setToast({ message: "Ошибка создания этикетки", type: "error" });
     } finally {
       setCreatingItem(false);
+    }
+  };
+
+  const openRenameFileModal = () => {
+    if (!selected) return;
+    const last = selected.btwFilePath
+      ? selected.btwFilePath.split(/[\\/]/).pop() || ""
+      : "";
+    setRenameFileName(last);
+    setIsRenamingFile(true);
+  };
+
+  const saveRenameFile = async () => {
+    if (!selected) return;
+    const cleaned = renameFileName.trim().replace(/[\\/]/g, " ").replace(/\s+/g, " ").trim();
+    if (!cleaned) {
+      setToast({ message: "Имя файла не может быть пустым", type: "error" });
+      return;
+    }
+    setSavingRename(true);
+    try {
+      const res = await fetch(`/api/products/${selected.id}/rename`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: cleaned }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const updated = await res.json();
+      setSelected(updated);
+      setFolderProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+      setIsRenamingFile(false);
+      setToast({ message: "Имя файла обновлено", type: "success" });
+    } catch (err) {
+      setToast({ message: "Ошибка переименования", type: "error" });
+    } finally {
+      setSavingRename(false);
     }
   };
 
@@ -1660,6 +1705,21 @@ export default function PrintPage() {
                         </button>
                       );
                     })()}
+                    {/* Имя файла — единственная мутирующая операция,
+                        доступная без пароля. Бэк-эндпоинт rename не
+                        требует isAdminRequest. Кнопка показывается всегда
+                        (и в редакторском режиме тоже — удобно править имя
+                        не открывая полную форму). */}
+                    {selected?.btwFilePath && (
+                      <button
+                        onClick={openRenameFileModal}
+                        className="py-2 px-3 text-[11px] font-bold tracking-wide uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        title="Изменить только имя файла этикетки"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Имя файла
+                      </button>
+                    )}
                     {/* Mutating actions — admin only. «К товару» above is just
                         navigation, so it stays available to operators. */}
                     {isAdmin && (
@@ -2267,6 +2327,34 @@ export default function PrintPage() {
       )}
 
       {/* MOVE LABEL MODAL */}
+      {/* RENAME FILE MODAL — единственная операция, доступная без админ-
+          пароля. Меняет только последний сегмент btwFilePath, сервер
+          сам чистит слэши и логирует diff. */}
+      {isRenamingFile && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsRenamingFile(false)}>
+          <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 w-[500px] flex flex-col" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-[var(--theme-text)] mb-1">Имя файла</h2>
+            <div className="text-xs text-[var(--theme-text-muted)] mb-4">Меняется только название этикетки в дереве папок. Все остальные данные товара остаются без изменений.</div>
+            <input
+              type="text"
+              className="input-field w-full mb-4"
+              value={renameFileName}
+              onChange={e => setRenameFileName(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") saveRenameFile(); if (e.key === "Escape") setIsRenamingFile(false); }}
+              placeholder="Например: Финики мазафати 200 г.btw"
+              autoFocus
+              disabled={savingRename}
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setIsRenamingFile(false)} disabled={savingRename} className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] transition-colors disabled:opacity-50">Отмена</button>
+              <button onClick={saveRenameFile} disabled={savingRename || !renameFileName.trim()} className="px-5 py-2 text-sm font-bold bg-amber-500 text-white hover:bg-amber-400 rounded-lg shadow-sm transition-colors disabled:opacity-50">
+                {savingRename ? "Сохранение…" : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isMovingFile && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => { setIsMovingFile(false); setBulkMoving(false); }}>
           <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl p-6 w-[500px] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
