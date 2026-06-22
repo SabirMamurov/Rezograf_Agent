@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
       sponsorText: source.sponsorText,
       extraText: source.extraText,
       isExport: source.isExport,
+      showCedarLogo: source.showCedarLogo,
       templateId: source.templateId,
     },
   });

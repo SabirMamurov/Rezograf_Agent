@@ -102,6 +102,15 @@ model Product {
   // labels. Also auto-triggered when btwFilePath sits under a folder
   // literally called «Единичный ШК» (legacy behavior since v1.3.2).
   isShkLabel      Boolean  @default(false)
+  // Когда true — на этикетке отображается корпоративный логотип
+  // «Сибирский Кедр» слева от блока «Изготовитель». На данный момент
+  // лого подкрепляется к отдельным позициям (единичные случаи), поэтому
+  // флаг по умолчанию false; оператор включает его per-product из
+  // редактора. Работает одинаково для обоих юрлиц (Эко-фабрика и ИП
+  // Абдуалиев) — текст изготовителя меняется по manufacturerType, лого
+  // остаётся «Сибирский Кедр». На ШК-шаблоне (двойной штрихкод) лого
+  // никогда не рендерится — отдельный layout, флаг там игнорируется.
+  showCedarLogo   Boolean  @default(false)
 
   templateId String?
   template   Template? @relation(fields: [templateId], references: [id])

@@ -58,6 +58,7 @@ interface Product {
   isShkLabel: boolean | null;
   manufacturer: string | null;
   manufacturerType: string | null;
+  showCedarLogo: boolean | null;
   updatedAt?: string;
   template?: {
     widthMm: number;
@@ -737,6 +738,7 @@ export default function PrintPage() {
       extraText: selected.extraText || "",
       isExport: !!selected.isExport,
       isShkLabel: !!selected.isShkLabel,
+      showCedarLogo: !!selected.showCedarLogo,
     });
     // Pull the file name (last segment) out of btwFilePath so the user
     // can rename the .btw file without manipulating the full Windows path.
@@ -1909,6 +1911,20 @@ export default function PrintPage() {
                         </label>
                       </div>
                       <div>
+                        <label className="flex items-center gap-3 cursor-pointer select-none p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)] hover:border-emerald-500/40 transition-colors">
+                          <input
+                            type="checkbox"
+                            className="w-5 h-5 accent-emerald-500 cursor-pointer"
+                            checked={!!editForm.showCedarLogo}
+                            onChange={e => setEditForm({...editForm, showCedarLogo: e.target.checked})}
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Логотип «Сибирский Кедр» <span className="text-[10px] font-normal opacity-60">(отдельные позиции)</span></span>
+                            <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">Когда включено — слева от блока с производителем печатается корпоративный логотип. Шрифт контактов сжимается с 24 px до 20 px, чтобы 4 строки адреса уместились в ту же высоту. На ШК-этикетках флаг не действует (там отдельный шаблон без блока изготовителя).</span>
+                          </div>
+                        </label>
+                      </div>
+                      <div>
                         <div className="p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)]">
                           <div className="flex flex-col mb-2">
                             <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Производитель</span>
@@ -2000,6 +2016,9 @@ export default function PrintPage() {
                       )}
                       {selected.isShkLabel && (
                         <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">ШК этикетка</span><span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-cyan-500/15 border border-cyan-500/40 text-cyan-600 dark:text-cyan-400">Только ШК + 2 копии</span></div>
+                      )}
+                      {selected.showCedarLogo && (
+                        <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Логотип</span><span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400">«Сибирский Кедр» — печатается</span></div>
                       )}
                       {(() => {
                         // Mirror /api/render/route.ts isAbdualievProduct logic.

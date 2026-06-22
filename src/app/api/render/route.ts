@@ -529,17 +529,27 @@ export async function POST(req: NextRequest) {
 function loadIconsAsBase64(): Record<string, string> {
   const iconsDir = path.join(process.cwd(), "public", "icons");
   const icons: Record<string, string> = {};
-  const iconFiles: Record<string, string> = {
-    eac: "eac.png",
-    fork_glass: "fork_glass.png",
-    pap20: "pap20.png",
+  // Большинство иконок — PNG (EAC, посуда/вилка, PAP20). Логотип
+  // «Сибирский Кедр» — SVG (векторный, чтобы мелкие завитки кроны не
+  // деградировали при ресайзе в pipeline threshold→nearest). Поле mime
+  // позволяет в одной мапе хранить оба формата.
+  const iconFiles: Record<string, { file: string; mime: string }> = {
+    eac: { file: "eac.png", mime: "image/png" },
+    fork_glass: { file: "fork_glass.png", mime: "image/png" },
+    pap20: { file: "pap20.png", mime: "image/png" },
+    // PNG высокого разрешения (1200×987) — детерминированная растеризация
+    // полнее переживает sharp threshold→nearest, чем браузерная (SVG
+    // даёт неровные края после бинаризации, особенно на тонких завитках
+    // кроны). Исходник cedar-logo.svg оставлен в репо для последующих
+    // итераций (упрощённый вариант, отдельные дерево/надпись и т. п.).
+    cedar_logo: { file: "cedar-logo.png", mime: "image/png" },
   };
 
-  for (const [key, filename] of Object.entries(iconFiles)) {
+  for (const [key, { file, mime }] of Object.entries(iconFiles)) {
     try {
-      const filepath = path.join(iconsDir, filename);
+      const filepath = path.join(iconsDir, file);
       const data = fs.readFileSync(filepath);
-      icons[key] = `data:image/png;base64,${data.toString("base64")}`;
+      icons[key] = `data:${mime};base64,${data.toString("base64")}`;
     } catch {
       icons[key] = "";
     }
@@ -851,6 +861,7 @@ function buildLabelHtml(
   const eacSrc = iconDataUris?.eac || "/icons/eac.png";
   const forkGlassSrc = iconDataUris?.fork_glass || "/icons/fork_glass.png";
   const pap20Src = iconDataUris?.pap20 || "/icons/pap20.png";
+  const cedarLogoSrc = iconDataUris?.cedar_logo || "/icons/cedar-logo.png";
 
   // Prefer inlined (data:) font CSS when available; fall back to CDN link
   // so rendering still works if the initial Google fetch failed.
@@ -1013,8 +1024,19 @@ ${fontStyleBlock}
         </div>
       </div>
 
-      <!-- Manufacturer info -->
-      <div style="font-size: 24px; font-weight: 700; text-align: center; line-height: 1.15; margin-bottom: 3px;">
+      <!-- Manufacturer info — когда product.showCedarLogo=true, рисуется
+           двухколоночный layout: лого «Сибирский Кедр» слева (120 px ≈
+           16 мм) + текст изготовителя справа (font-size 20 px, чтобы 4
+           строки поместились в ту же вертикаль). Без флага — обычный
+           центрированный текстовый блок 24 px, без логотипа (как было
+           до v1.4.23). Один и тот же flex-блок переключается между двумя
+           видами через тернарник, чтобы не дублировать ветку
+           Эко-фабрика / Абдуалиев дважды. Зеркало в LabelPreview.tsx. -->
+      ${product?.showCedarLogo
+        ? `<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 3px;">
+          <img src="${cedarLogoSrc}" style="height: 120px; width: auto; flex: 0 0 auto; display: block; object-fit: contain;" />
+          <div style="flex: 1 1 auto; font-size: 20px; font-weight: 700; text-align: center; line-height: 1.15;">`
+        : `<div style="font-size: 24px; font-weight: 700; text-align: center; line-height: 1.15; margin-bottom: 3px;">`}
         ${isAbdualievProduct
           ? `Изготовитель: ИП Абдуалиев В.Г.<br />
         Тел.: + 7 913-851-49-49<br />
@@ -1024,7 +1046,7 @@ ${fontStyleBlock}
         тел. (3822) 311-175<br />
         Адрес: Россия, 634593, Томская область, Томский район,<br />
         д. Петрово, ул. Луговая, 11`}
-      </div>
+      ${product?.showCedarLogo ? `</div></div>` : `</div>`}
 
       <!-- Product Name -->
       <div style="font-size: 32px; font-family: 'Roboto Condensed', sans-serif; font-weight: 900; text-decoration: underline; text-align: center; line-height: 1.1; min-height: 30px; flex-shrink: 0; margin-bottom: 3px; text-underline-offset: 3px;">

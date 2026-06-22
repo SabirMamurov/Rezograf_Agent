@@ -21,6 +21,7 @@ interface Product {
   isExport?: boolean | null;
   isShkLabel?: boolean | null;
   manufacturerType?: string | null;
+  showCedarLogo?: boolean | null;
 }
 
 interface LabelPreviewProps {
@@ -640,9 +641,11 @@ export default function LabelPreview({
             </div>
           </div>
 
-          {/* ── Manufacturer info ── */}
-          <div style={{ fontSize: "24px", fontWeight: 700, textAlign: "center", lineHeight: "1.15", marginBottom: "3px" }}>
-            {isAbdualievProduct ? (
+          {/* ── Manufacturer info — лого слева + текст справа при
+              showCedarLogo=true, иначе обычный центрированный текст.
+              Зеркало /api/render/route.ts. ── */}
+          {(() => {
+            const manufacturerLines = isAbdualievProduct ? (
               <>
                 Изготовитель: ИП Абдуалиев В.Г.<br />
                 Тел.: + 7 913-851-49-49<br />
@@ -656,8 +659,24 @@ export default function LabelPreview({
                 Адрес: Россия, 634593, Томская область, Томский район,<br />
                 д. Петрово, ул. Луговая, 11
               </>
-            )}
-          </div>
+            );
+            if (product?.showCedarLogo) {
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "3px" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/icons/cedar-logo.png" alt="Сибирский Кедр" style={{ height: "120px", width: "auto", flex: "0 0 auto", display: "block", objectFit: "contain" }} />
+                  <div style={{ flex: "1 1 auto", fontSize: "20px", fontWeight: 700, textAlign: "center", lineHeight: "1.15" }}>
+                    {manufacturerLines}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div style={{ fontSize: "24px", fontWeight: 700, textAlign: "center", lineHeight: "1.15", marginBottom: "3px" }}>
+                {manufacturerLines}
+              </div>
+            );
+          })()}
 
           {/* ── Product Name ── */}
           <div style={{

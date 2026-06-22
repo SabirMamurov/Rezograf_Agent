@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
       extraText: body.extraText || null,
       isExport: !!body.isExport,
       isShkLabel: !!body.isShkLabel,
+      showCedarLogo: !!body.showCedarLogo,
       templateId: body.templateId || null,
     },
   });
@@ -198,6 +199,9 @@ export async function PATCH(req: NextRequest) {
   }
   if ("isShkLabel" in data) {
     updateData.isShkLabel = !!data.isShkLabel;
+  }
+  if ("showCedarLogo" in data) {
+    updateData.showCedarLogo = !!data.showCedarLogo;
   }
   // Normalize barcode on edit too: if operator types 13 digits with '2' prefix
   // → save 14-digit ITF-14 with computed check; if 12 digits → save 13-digit

@@ -42,6 +42,7 @@ export async function PUT(
       sponsorText: body.sponsorText !== undefined ? body.sponsorText : undefined,
       extraText: body.extraText !== undefined ? body.extraText : undefined,
       manufacturerType: body.manufacturerType !== undefined ? body.manufacturerType : undefined,
+      showCedarLogo: body.showCedarLogo !== undefined ? !!body.showCedarLogo : undefined,
       templateId: body.templateId ?? undefined,
     },
   });
