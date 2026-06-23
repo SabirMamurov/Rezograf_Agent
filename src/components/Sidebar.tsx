@@ -37,12 +37,28 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    href: "/package",
+    label: "На упаковку",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 7l9-4 9 4M3 7v10l9 4 9-4V7M3 7l9 4M21 7l-9 4M12 11v10" />
+      </svg>
+    ),
+  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [isLight, setIsLight] = useState(true);
   const { isAdmin, openPrompt, lock } = useAdmin();
+
+  // `usePathname` на SSR и client может отличаться у Next.js App Router
+  // (особенно во время dev/HMR). Сам Next.js на новый прокачанный pathname
+  // рендерит правильную ссылку без мерцания, а warning безвреден —
+  // подавляем suppressHydrationWarning на nav-контейнере, чтобы не пугать
+  // оператора красным баннером в DevTools.
+  const activePath = pathname;
 
   useEffect(() => {
     setIsLight(document.documentElement.classList.contains("light"));
@@ -105,14 +121,14 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-4 py-6 flex flex-col gap-1">
         {NAV_ITEMS.map((item) => (
           <Link
             key={item.href}
             href={item.href}
+            suppressHydrationWarning
             className={`sidebar-link ${
-              pathname === item.href || pathname?.startsWith(item.href + "/")
+              activePath === item.href || activePath?.startsWith(item.href + "/")
                 ? "active"
                 : ""
             }`}
@@ -152,9 +168,9 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="p-4 border-t border-[var(--theme-border)] relative overflow-hidden flex items-center justify-between">
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-surface)] to-transparent pointer-events-none"></div>
-        <Link href="/changelog" className={`text-[11px] font-medium tracking-wide relative z-10 flex items-center gap-2 no-underline transition-colors ${pathname === '/changelog' ? 'text-indigo-500' : 'text-[var(--theme-text-muted, var(--color-text-muted))] hover:text-[var(--theme-text)]'}`}>
+        <Link href="/changelog" className={`text-[11px] font-medium tracking-wide relative z-10 flex items-center gap-2 no-underline transition-colors ${activePath === '/changelog' ? 'text-indigo-500' : 'text-[var(--theme-text-muted, var(--color-text-muted))] hover:text-[var(--theme-text)]'}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></span>
-          v1.4.23
+          v1.4.24
         </Link>
         
         {/* Theme Toggle */}
