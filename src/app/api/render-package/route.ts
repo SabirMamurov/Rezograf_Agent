@@ -94,9 +94,12 @@ function buildPackageLabelHtml(
   return `<!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700;800;900&family=Roboto:wght@400;700;900&family=Manrope:wght@700;800&subset=cyrillic,cyrillic-ext,latin&display=swap" rel="stylesheet">
+<!-- Google Fonts external link убран намеренно: прод-VM не имеет
+     IPv6-маршрута до fonts.gstatic.com, fetch висит на ENETUNREACH
+     и Puppeteer падает при screenshot/PDF. До того, как встроим
+     fonts inline через data:URI, headless Chromium использует
+     системный sans-serif fallback. -->
+<style>html, body { font-family: 'Arial', 'Helvetica', sans-serif; }</style>
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { margin: 0; padding: 0; font-family: 'Roboto Condensed', 'Arial', sans-serif; color: black; background: white; }
@@ -322,7 +325,6 @@ export async function POST(req: NextRequest) {
       // Явно ждём сетевую загрузку — `domcontentloaded` не дожидается
       // подгрузки шрифтов из Google Fonts, а fonts.ready может разрешиться
       // с fallback-шрифтом, если @font-face ещё не загружен.
-      try { await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }); } catch {}
       await page.evaluate(() => document.fonts.ready);
       // измеряем фактическую высоту контента
       const innerHeight = await page.evaluate(() => {
@@ -347,7 +349,6 @@ export async function POST(req: NextRequest) {
       // Явно ждём сетевую загрузку — `domcontentloaded` не дожидается
       // подгрузки шрифтов из Google Fonts, а fonts.ready может разрешиться
       // с fallback-шрифтом, если @font-face ещё не загружен.
-      try { await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }); } catch {}
       await page.evaluate(() => document.fonts.ready);
       // Canvas рендерится при виртуальной ширине 700 CSS px, чтобы шрифты
       // и иконки выглядели крупно. Физическая бумага 70 мм = 264.57 CSS px
