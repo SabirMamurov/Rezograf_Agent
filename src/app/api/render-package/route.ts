@@ -349,12 +349,20 @@ export async function POST(req: NextRequest) {
       // с fallback-шрифтом, если @font-face ещё не загружен.
       try { await page.waitForNetworkIdle({ idleTime: 500, timeout: 8000 }); } catch {}
       await page.evaluate(() => document.fonts.ready);
+      // Canvas рендерится при виртуальной ширине 700 CSS px, чтобы шрифты
+      // и иконки выглядели крупно. Физическая бумага 70 мм = 264.57 CSS px
+      // (1 mm = 3.7795 CSS px при 96 DPI). Поэтому scale = 264.57 / 700 ≈
+      // 0.378 — сжимаем контент в 2.65 раза, чтобы он умещался по ширине,
+      // и одновременно одна страница покрывала всю высоту. pageRanges: "1"
+      // гарантирует ровно один лист — если контент окажется чуть выше
+      // 120 мм, вторая пустая страница не появится.
       const pdf = await page.pdf({
         width: `${LABEL_W_MM}mm`,
         height: `${LABEL_H_MM}mm`,
         printBackground: true,
         margin: { top: 0, right: 0, bottom: 0, left: 0 },
-        preferCSSPageSize: true,
+        scale: (LABEL_W_MM * 3.7795) / VIRTUAL_W_PX,
+        pageRanges: "1",
       });
       return new NextResponse(pdf as unknown as BodyInit, {
         status: 200,
