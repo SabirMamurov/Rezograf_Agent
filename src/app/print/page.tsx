@@ -1881,6 +1881,8 @@ export default function PrintPage() {
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Стандарт (СТО/ГОСТ)</label><input type="text" className="input-field" value={editForm.certCode || ""} onChange={e => setEditForm({...editForm, certCode: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">КБЖУ</label><textarea className="input-field min-h-[60px]" value={editForm.nutritionalInfo || ""} onChange={e => setEditForm({...editForm, nutritionalInfo: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Состав</label><textarea className="input-field min-h-[80px]" value={editForm.composition || ""} onChange={e => setEditForm({...editForm, composition: e.target.value})} /></div>
+                      <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Вес места <span className="text-[10px] font-normal opacity-60">(нетто / брутто гофрокороба)</span></label><input type="text" className="input-field" value={editForm.boxWeight || ""} onChange={e => setEditForm({...editForm, boxWeight: e.target.value})} placeholder="напр. Вес места - нетто: 7 кг, брутто: 7,6 кг" /></div>
+                      <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Спонсор / доп. строка</label><input type="text" className="input-field" value={editForm.sponsorText || ""} onChange={e => setEditForm({...editForm, sponsorText: e.target.value})} /></div>
                       <div><label className="block text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider">Доп. текст <span className="text-[10px] font-normal opacity-60">(обечайка, маркетплейс, БИО и т.п.)</span></label><input type="text" className="input-field" value={editForm.extraText || ""} onChange={e => setEditForm({...editForm, extraText: e.target.value})} placeholder="напр. Обечайка 8 Марта, OZON, RU-BIO-112" /></div>
                       <div>
                         <label className="flex items-center gap-3 cursor-pointer select-none p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)] hover:border-indigo-500/40 transition-colors">
@@ -2001,6 +2003,12 @@ export default function PrintPage() {
                       )}
                       {selected.certCode && (
                         <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Стандарт</span><span className="font-semibold text-[var(--theme-text)] leading-none mt-0.5">{selected.certCode}</span></div>
+                      )}
+                      {selected.boxWeight && (
+                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1">Вес места</span><span className="text-xs text-[var(--theme-text)]">{selected.boxWeight}</span></div>
+                      )}
+                      {selected.sponsorText && (
+                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1">Спонсор</span><span className="text-xs text-[var(--theme-text)]">{selected.sponsorText}</span></div>
                       )}
                       {selected.storageCond && (
                         <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Срок и условия </span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.storageCond}</span></div>
