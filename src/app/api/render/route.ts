@@ -605,17 +605,17 @@ function buildShkLabelHtml(
     titleLen <= 70 ? 26 :
     22;
   const subtitleFontPx = titleFontPx >= 32 ? 24 : 20;
-  // ШК labels conventionally encode the weight inside the title (e.g.
-  // "...МП/200г") so the separate `weight` subtitle ended up showing
-  // the same number twice on the printed sticker. Suppress the subtitle
-  // when the weight is already inside the name. Normalisation collapses
-  // whitespace and lowercases so "200 г" matches "200г" and "200 Г".
-  // Keep aligned with the same heuristic in LabelPreview.tsx ШК branch.
-  const norm = (s: string) =>
-    s.toLowerCase().replace(/\s+/g, "").replace(/ё/g, "е");
-  const weightInTitle =
-    rawSubtitle.length > 0 && norm(title).includes(norm(rawSubtitle));
-  const subtitle = weightInTitle ? "" : rawSubtitle;
+  // ШК labels — вес (product.weight) вообще не рендерится на этикетке
+  // как подзаголовок. Причина: наименование продукта уже содержит
+  // граммовку («... 450 г»), а если поле `weight` заполнено, subtitle
+  // добавлял ещё одну строку под названием, которая при длинных
+  // названиях наезжала на цифры штрихкода снизу. Операторам приходилось
+  // каждый раз стирать поле «Масса» вручную; проще всегда его
+  // игнорировать в ШК шаблоне. Значение поля остаётся в БД, просто не
+  // выводится на печать. Ссылка на rawSubtitle нужна чтобы TypeScript
+  // не жаловался на неиспользуемую переменную.
+  void rawSubtitle;
+  const subtitle = "";
   const isExport = !!product?.isExport;
 
   return `<!DOCTYPE html>

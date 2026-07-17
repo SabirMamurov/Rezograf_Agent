@@ -209,16 +209,12 @@ export default function LabelPreview({
     // page (search for isShkProduct).
     const shkDigitOnly = (product?.barcodeEan13 || "").replace(/\D/g, "");
     const shkUseSeparateDigits = shkDigitOnly.length > 0;
-    // ШК labels conventionally encode the weight inside the title
-    // ("...МП/200г"), so showing the separate `weight` subtitle below
-    // the name printed the same number twice. Hide the subtitle when
-    // the weight is already inside the name. Mirror the check in
-    // buildShkLabelHtml (src/app/api/render/route.ts) so preview = print.
-    const norm = (s: string) =>
-      s.toLowerCase().replace(/\s+/g, "").replace(/ё/g, "е");
-    const weightInTitle =
-      rawSubtitle.length > 0 && norm(title).includes(norm(rawSubtitle));
-    const subtitle = weightInTitle ? "" : rawSubtitle;
+    // ШК labels — вес (product.weight) вообще не рендерится в превью
+    // как подзаголовок (zeркало логики в /api/render/route.ts). Название
+    // продукта уже содержит граммовку, а лишний subtitle съедал место
+    // под названием и в длинных названиях наезжал на цифры штрихкода.
+    void rawSubtitle;
+    const subtitle = "";
     return (
       <div
         className="label-preview-frame"
