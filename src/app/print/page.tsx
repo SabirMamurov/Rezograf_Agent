@@ -59,6 +59,7 @@ interface Product {
   manufacturer: string | null;
   manufacturerType: string | null;
   showCedarLogo: boolean | null;
+  showLabelDates: boolean | null;
   updatedAt?: string;
   template?: {
     widthMm: number;
@@ -739,6 +740,13 @@ export default function PrintPage() {
       isExport: !!selected.isExport,
       isShkLabel: !!selected.isShkLabel,
       showCedarLogo: !!selected.showCedarLogo,
+      // showLabelDates: null = авто, true = показать, false = скрыть.
+      showLabelDates:
+        selected.showLabelDates === true
+          ? true
+          : selected.showLabelDates === false
+            ? false
+            : null,
     });
     // Pull the file name (last segment) out of btwFilePath so the user
     // can rename the .btw file without manipulating the full Windows path.
@@ -1929,6 +1937,39 @@ export default function PrintPage() {
                       <div>
                         <div className="p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)]">
                           <div className="flex flex-col mb-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Даты изготовления/годен до</span>
+                            <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">В режиме «Авто» даты скрываются на этикетках из папок «Весовые» (готовим место под «Честный знак») и показываются на всех остальных. Переключатель позволяет принудительно скрыть или показать даты независимо от папки.</span>
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            {([
+                              { v: null, label: "Авто" },
+                              { v: true, label: "Показать" },
+                              { v: false, label: "Скрыть" },
+                            ] as const).map((opt, i) => {
+                              const current = editForm.showLabelDates ?? null;
+                              const active = current === opt.v;
+                              return (
+                                <label
+                                  key={i}
+                                  className={`flex-1 min-w-[100px] flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors ${active ? "bg-emerald-500/10 border-emerald-500/40 text-[var(--theme-text)]" : "bg-transparent border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-emerald-500/40"}`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="showLabelDates"
+                                    className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                                    checked={active}
+                                    onChange={() => setEditForm({ ...editForm, showLabelDates: opt.v })}
+                                  />
+                                  <span className="text-xs font-semibold">{opt.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)]">
+                          <div className="flex flex-col mb-2">
                             <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Производитель</span>
                             <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">Какой блок «Изготовитель» печатается на этикетке. По умолчанию — Эко-фабрика. Переключите, если товар выпускается под ИП Абдуалиев.</span>
                           </div>
@@ -2028,6 +2069,26 @@ export default function PrintPage() {
                       {selected.showCedarLogo && (
                         <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs">Логотип</span><span className="font-bold text-[10px] tracking-wider px-2 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400">«Сибирский Кедр» — печатается</span></div>
                       )}
+                      {(() => {
+                        // Mirror /api/render/route.ts showLabelDates logic.
+                        const isWeightFolder =
+                          typeof selected.btwFilePath === "string" &&
+                          /\\[^\\]*[Ее]совые?[^\\]*\\/i.test(selected.btwFilePath);
+                        const explicit = selected.showLabelDates === true || selected.showLabelDates === false;
+                        const showDates = selected.showLabelDates === true
+                          ? true
+                          : selected.showLabelDates === false
+                            ? false
+                            : !isWeightFolder;
+                        return (
+                          <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1">
+                            <span className="text-[var(--theme-text-muted)] text-xs">Даты</span>
+                            <span className={`font-bold text-[10px] tracking-wider px-2 py-1 rounded-md ${showDates ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400"}`}>
+                              {showDates ? "Печатаются" : "Скрыты"}{!explicit && <span className="ml-1 opacity-60 font-normal">(авто)</span>}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       {(() => {
                         // Mirror /api/render/route.ts isAbdualievProduct logic.
                         const isAbd = selected.manufacturerType === "abdualiev"

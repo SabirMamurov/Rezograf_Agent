@@ -141,6 +141,10 @@ export async function POST(req: NextRequest) {
       isExport: !!body.isExport,
       isShkLabel: !!body.isShkLabel,
       showCedarLogo: !!body.showCedarLogo,
+      showLabelDates:
+        body.showLabelDates === true || body.showLabelDates === false
+          ? body.showLabelDates
+          : null,
       templateId: body.templateId || null,
     },
   });
@@ -202,6 +206,17 @@ export async function PATCH(req: NextRequest) {
   }
   if ("showCedarLogo" in data) {
     updateData.showCedarLogo = !!data.showCedarLogo;
+  }
+  if ("showLabelDates" in data) {
+    // null → авто; true/false — явное значение. Строки "on"/"off" из
+    // radio-selector нормализуем в bool/null.
+    const v = data.showLabelDates;
+    updateData.showLabelDates =
+      v === true || v === "on" || v === "true"
+        ? true
+        : v === false || v === "off" || v === "false"
+          ? false
+          : null;
   }
   // Normalize barcode on edit too: if operator types 13 digits with '2' prefix
   // → save 14-digit ITF-14 with computed check; if 12 digits → save 13-digit

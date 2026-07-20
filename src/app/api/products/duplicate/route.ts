@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
       extraText: source.extraText,
       isExport: source.isExport,
       showCedarLogo: source.showCedarLogo,
+      showLabelDates: source.showLabelDates,
       templateId: source.templateId,
     },
   });

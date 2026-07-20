@@ -829,6 +829,23 @@ function buildLabelHtml(
         : typeof product?.btwFilePath === "string" &&
           /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
+  // Показывать ли блок с датами «Дата изготовления» / «Годен до».
+  //   product.showLabelDates === true  → всегда показать
+  //   product.showLabelDates === false → всегда скрыть
+  //   null/undefined                   → авто: скрыть для товаров в весовых
+  //                                       папках (готовим место под будущий
+  //                                       «Честный знак»), показать остальным.
+  // Keep aligned with src/components/LabelPreview.tsx.
+  const isWeightFolder =
+    typeof product?.btwFilePath === "string" &&
+    /\\[^\\]*[Ее]совые?[^\\]*\\/i.test(product.btwFilePath);
+  const showLabelDates =
+    product?.showLabelDates === true
+      ? true
+      : product?.showLabelDates === false
+        ? false
+        : !isWeightFolder;
+
   // ШК (showbox barcode-only) labels: either the product is explicitly
   // flagged via the `isShkLabel` column (set from the inspector edit
   // form / create form), or its btwFilePath sits under a folder literally
@@ -1097,14 +1114,18 @@ ${fontStyleBlock}
       </div>
       ` : ''}
 
-      <!-- Dates — pushed to bottom to align with QR code sticker -->
+      ${showLabelDates ? `
+      <!-- Dates — pushed to bottom to align with QR code sticker.
+           Скрываются автоматически на этикетках из «весовых» папок под
+           будущий «Честный знак» (Data Matrix + дата). Явное значение
+           product.showLabelDates перекрывает это поведение. -->
       <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Дата изготовления:</div>
         <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(mfgDate || "—")}</div>
-        
+
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Годен до:</div>
         <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(expDate || "—")}</div>
-      </div>
+      </div>` : ""}
       </div>
     </div>
   </div>

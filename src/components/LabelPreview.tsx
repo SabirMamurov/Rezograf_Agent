@@ -22,6 +22,7 @@ interface Product {
   isShkLabel?: boolean | null;
   manufacturerType?: string | null;
   showCedarLogo?: boolean | null;
+  showLabelDates?: boolean | null;
 }
 
 interface LabelPreviewProps {
@@ -176,6 +177,19 @@ export default function LabelPreview({
         ? false
         : typeof product?.btwFilePath === "string" &&
           /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
+
+  // Показывать ли блок дат — зеркало логики в /api/render/route.ts.
+  // null → авто по btwFilePath (весовые папки → скрыть); true/false —
+  // явное переопределение.
+  const isWeightFolder =
+    typeof product?.btwFilePath === "string" &&
+    /\\[^\\]*[Ее]совые?[^\\]*\\/i.test(product.btwFilePath);
+  const showLabelDates =
+    product?.showLabelDates === true
+      ? true
+      : product?.showLabelDates === false
+        ? false
+        : !isWeightFolder;
 
   // ШК (showbox barcode-only) labels: either the product is explicitly
   // flagged via the inspector edit form, or its btwFilePath sits under
@@ -736,13 +750,15 @@ export default function LabelPreview({
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
-            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
-            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{mfgDate || "—"}</div>
-            
-            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
-            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{expDate || "—"}</div>
-          </div>
+          {showLabelDates && (
+            <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
+              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
+              <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{mfgDate || "—"}</div>
+
+              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
+              <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{expDate || "—"}</div>
+            </div>
+          )}
         </div>
       </div>
     </div>

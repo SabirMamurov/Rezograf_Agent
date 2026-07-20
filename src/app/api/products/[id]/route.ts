@@ -43,6 +43,14 @@ export async function PUT(
       extraText: body.extraText !== undefined ? body.extraText : undefined,
       manufacturerType: body.manufacturerType !== undefined ? body.manufacturerType : undefined,
       showCedarLogo: body.showCedarLogo !== undefined ? !!body.showCedarLogo : undefined,
+      showLabelDates:
+        body.showLabelDates === undefined
+          ? undefined
+          : body.showLabelDates === true || body.showLabelDates === "on" || body.showLabelDates === "true"
+            ? true
+            : body.showLabelDates === false || body.showLabelDates === "off" || body.showLabelDates === "false"
+              ? false
+              : null,
       templateId: body.templateId ?? undefined,
     },
   });
