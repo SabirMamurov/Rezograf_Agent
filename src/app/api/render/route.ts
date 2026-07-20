@@ -354,11 +354,22 @@ export async function POST(req: NextRequest) {
       !!product?.isShkLabel ||
       (typeof product?.btwFilePath === "string" && /\\Единичный ШК\\/i.test(product.btwFilePath));
 
+    // Grow-path тоже пропускаем, когда даты явно скрыты (весовые товары
+    // под «Честный знак») — иначе освобождённое место снизу тут же
+    // съедалось бы растянутым до 97% высоты контентом, а нам нужно
+    // оставить пустое поле под будущий стикер.
+    const isWeightFolderForScale =
+      typeof product?.btwFilePath === "string" &&
+      /\\[^\\]*[Ее]совые?[^\\]*\\/i.test(product.btwFilePath);
+    const skipGrow =
+      product?.showLabelDates === false ||
+      (product?.showLabelDates !== true && isWeightFolderForScale);
+
     if (contentHeight > vHeight) {
       // Existing shrink-to-fit path
       const shrink = vHeight / contentHeight;
       await applyScaleInDom(shrink);
-    } else if (!isShkForScale && contentHeight < vHeight * GROW_TRIGGER) {
+    } else if (!isShkForScale && !skipGrow && contentHeight < vHeight * GROW_TRIGGER) {
       // Grow path: enough free space to reasonably enlarge text
       const proposed = Math.min(MAX_GROW, (vHeight * SAFETY_MARGIN) / contentHeight);
       // Step 1: narrow + scale (this re-wraps text and may shift heights)
@@ -1114,18 +1125,19 @@ ${fontStyleBlock}
       </div>
       ` : ''}
 
-      ${showLabelDates ? `
-      <!-- Dates — pushed to bottom to align with QR code sticker.
-           Скрываются автоматически на этикетках из «весовых» папок под
-           будущий «Честный знак» (Data Matrix + дата). Явное значение
-           product.showLabelDates перекрывает это поведение. -->
-      <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">
+      <!-- Dates block. При showLabelDates=true рендерим обычный
+           grid с двумя строками дат. При false — блок-заглушку с той
+           же явной высотой (min-height: 110 px в виртуальных единицах),
+           чтобы контент выше не подтягивался — освобождённая зона
+           отводится под стикер «Честный знак», который наклеивают
+           отдельно. -->
+      ${showLabelDates ? `<div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Дата изготовления:</div>
         <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(mfgDate || "—")}</div>
 
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Годен до:</div>
         <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(expDate || "—")}</div>
-      </div>` : ""}
+      </div>` : `<div style="min-height: 110px; margin-top: auto; padding-top: 15px;" aria-hidden="true"></div>`}
       </div>
     </div>
   </div>
