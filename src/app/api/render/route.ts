@@ -1125,19 +1125,19 @@ ${fontStyleBlock}
       </div>
       ` : ''}
 
-      <!-- Dates block. При showLabelDates=true рендерим обычный
-           grid с двумя строками дат. При false — блок-заглушку с той
-           же явной высотой (min-height: 110 px в виртуальных единицах),
-           чтобы контент выше не подтягивался — освобождённая зона
-           отводится под стикер «Честный знак», который наклеивают
-           отдельно. -->
-      ${showLabelDates ? `<div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">
+      <!-- Dates block. Лейблы «Дата изготовления:» и «Годен до:»
+           показываются всегда. Сами значения дат рендерятся только при
+           showLabelDates=true; при false ячейка со значением остаётся
+           пустой (grid-структура и высота не меняются), чтобы освободить
+           место под будущий стикер «Честный знак», но само место с
+           лейблами остаётся визуально таким же. -->
+      <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Дата изготовления:</div>
-        <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(mfgDate || "—")}</div>
+        <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${showLabelDates ? escapeHtml(mfgDate || "—") : ""}</div>
 
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Годен до:</div>
-        <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${escapeHtml(expDate || "—")}</div>
-      </div>` : `<div style="min-height: 110px; margin-top: auto; padding-top: 15px;" aria-hidden="true"></div>`}
+        <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${showLabelDates ? escapeHtml(expDate || "—") : ""}</div>
+      </div>
       </div>
     </div>
   </div>

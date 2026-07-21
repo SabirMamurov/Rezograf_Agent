@@ -750,21 +750,16 @@ export default function LabelPreview({
             </div>
           )}
 
-          {/* Блок дат. Если showLabelDates=true — обычный grid с датами.
-              Если false — блок-заглушка min-height 110 px, чтобы
-              контент выше не подтягивался и оставалось место под будущий
-              стикер «Честный знак». Mirror /api/render/route.ts. */}
-          {showLabelDates ? (
-            <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
-              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
-              <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{mfgDate || "—"}</div>
+          {/* Блок дат. Лейблы всегда видны; при showLabelDates=false
+              значения пусты — освобождается место под стикер «Честный
+              знак». Mirror /api/render/route.ts. */}
+          <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
+            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
+            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{showLabelDates ? (mfgDate || "—") : ""}</div>
 
-              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
-              <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{expDate || "—"}</div>
-            </div>
-          ) : (
-            <div style={{ minHeight: "110px", marginTop: "auto", paddingTop: "15px" }} aria-hidden="true" />
-          )}
+            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
+            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{showLabelDates ? (expDate || "—") : ""}</div>
+          </div>
         </div>
       </div>
     </div>
