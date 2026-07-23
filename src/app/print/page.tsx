@@ -582,7 +582,10 @@ export default function PrintPage() {
         if (expDateOverrideStr === null) {
           const months = parseShelfLifeMonths(selected?.storageCond ?? null);
           const auto = new Date(today);
-          auto.setMonth(auto.getMonth() + months);
+          // Тот же 30-дней/мес алгоритм что и в useMemo — иначе превью и
+          // печать разошлись бы. Календарный setMonth здесь давал ±3
+          // дня разницы против 30-дневного расчёта наверху.
+          auto.setDate(auto.getDate() + months * 30);
           expToPrint = formatDate(auto);
         }
         setMfgDateStr(todayInput);
