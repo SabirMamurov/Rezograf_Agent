@@ -212,6 +212,15 @@ export default function PrintPage() {
   const clearBulkSelected = () => setBulkSelectedIds(new Set());
 
   const [mfgDateStr, setMfgDateStr] = useState("");
+  // «Свежесть» даты изготовления. Флаг равен true, если mfgDateStr
+  // выставили автоматически (на маунте или при выборе товара). После
+  // ручной правки инпута оператор становится «владельцем» даты, и мы
+  // больше её не трогаем, пока он не сбросит фокус выбором другого
+  // товара. Флаг нужен для сценария «вкладка открыта через полночь»:
+  // оператор пришёл утром 18-го, а mfgDateStr всё ещё «2026-07-17» —
+  // при фокусе окна автоматом подтянем сегодня, но только если он даты
+  // не менял вручную (иначе перезаписали бы его 15-е в 17-е).
+  const [mfgDateAuto, setMfgDateAuto] = useState(true);
   // Optional manual override for the "годен до" (use-by) date.
   // Default behaviour: auto-compute from mfgDateStr + shelf-life months in
   // selected.storageCond. Operators sometimes need a different value (custom
@@ -360,7 +369,30 @@ export default function PrintPage() {
 
   useEffect(() => {
     setMfgDateStr(toInputDate(new Date()));
+    setMfgDateAuto(true);
   }, []);
+
+  // Если вкладка открыта через полночь, тихо подтягиваем дату к сегодня
+  // при возврате фокуса — но только пока оператор её не менял вручную.
+  // Иначе сохранится «17.07» с прошлой сессии и печать пойдёт с
+  // прошлой датой (обнаружено: оператор жаловался на «то 17, то 18 в
+  // течение дня»).
+  useEffect(() => {
+    const refresh = () => {
+      if (!mfgDateAuto) return;
+      const today = toInputDate(new Date());
+      setMfgDateStr((prev) => (prev !== today ? today : prev));
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [mfgDateAuto]);
 
   const { mfgDateFormatted, expDateFormatted, autoExpDateStr } = useMemo(() => {
     if (!mfgDateStr) {
@@ -507,6 +539,7 @@ export default function PrintPage() {
     // Reset manufacturing date to today on every product switch — operators
     // don't expect a date typed for one label to carry over to the next.
     setMfgDateStr(toInputDate(new Date()));
+    setMfgDateAuto(true);
     // Same logic for the use-by override: don't carry a one-off override
     // from one label onto the next.
     setExpDateOverrideStr(null);
@@ -533,6 +566,29 @@ export default function PrintPage() {
   const handlePrint = useCallback(async () => {
     if (!selected) return;
 
+    // Second line of defence against the «17/18 date drift»: если
+    // оператор не менял дату вручную (mfgDateAuto=true), берём сегодня
+    // ПРЯМО СЕЙЧАС и подставляем в fetch. Не полагаемся на пересчёт
+    // useMemo — он произойдёт только в следующем рендере, а печатать
+    // надо сейчас с актуальной датой. Заодно обновляем state, чтобы
+    // на превью тоже отобразилось правильное число.
+    let mfgToPrint = mfgDateFormatted;
+    let expToPrint = expDateFormatted;
+    if (mfgDateAuto) {
+      const todayInput = toInputDate(new Date());
+      if (todayInput !== mfgDateStr) {
+        const today = new Date(todayInput + "T00:00:00");
+        mfgToPrint = formatDate(today);
+        if (expDateOverrideStr === null) {
+          const months = parseShelfLifeMonths(selected?.storageCond ?? null);
+          const auto = new Date(today);
+          auto.setMonth(auto.getMonth() + months);
+          expToPrint = formatDate(auto);
+        }
+        setMfgDateStr(todayInput);
+      }
+    }
+
     setRendering(true);
 
     try {
@@ -557,8 +613,8 @@ export default function PrintPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId: selected.id,
-          mfgDate: mfgDateFormatted,
-          expDate: expDateFormatted,
+          mfgDate: mfgToPrint,
+          expDate: expToPrint,
           format: "image",
         }),
       });
@@ -665,7 +721,7 @@ export default function PrintPage() {
       setToast({ type: "error", message: e.message || "Ошибка печати." });
       setRendering(false);
     }
-  }, [selected, mfgDateFormatted, expDateFormatted]);
+  }, [selected, mfgDateFormatted, expDateFormatted, mfgDateAuto, mfgDateStr, expDateOverrideStr]);
 
   const handleRenderPdf = async () => {
     if (!selected) return;
@@ -2146,7 +2202,7 @@ export default function PrintPage() {
                       <div className="flex items-center justify-between mb-1.5 min-h-[18px]">
                         <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] tracking-wider">ДАТА ИЗГОТОВЛЕНИЯ</label>
                       </div>
-                      <input type="date" value={mfgDateStr} onChange={e => setMfgDateStr(e.target.value)} className="w-full bg-[var(--theme-input-bg)] text-[var(--theme-text)] border border-[var(--theme-border)] p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono cursor-pointer transition-all" />
+                      <input type="date" value={mfgDateStr} onChange={e => { setMfgDateStr(e.target.value); setMfgDateAuto(false); }} className="w-full bg-[var(--theme-input-bg)] text-[var(--theme-text)] border border-[var(--theme-border)] p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono cursor-pointer transition-all" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1.5 min-h-[18px] gap-2">
