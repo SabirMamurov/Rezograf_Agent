@@ -72,10 +72,10 @@ export default function PackagePage() {
       iframe.style.right = "0";
       iframe.style.bottom = "0";
       iframe.style.width = "70mm";
-      iframe.style.height = "120mm";
+      iframe.style.height = "90mm";
       iframe.style.border = "0";
       iframe.style.opacity = "0";
-      iframe.srcdoc = `<!doctype html><html><head><style>@page{size:70mm 120mm;margin:0}body{margin:0}img{display:block;width:70mm;height:120mm;image-rendering:pixelated}</style></head><body><img src="${url}"></body></html>`;
+      iframe.srcdoc = `<!doctype html><html><head><style>@page{size:70mm 90mm;margin:0}body{margin:0}img{display:block;width:70mm;height:90mm;image-rendering:pixelated}</style></head><body><img src="${url}"></body></html>`;
       document.body.appendChild(iframe);
       iframe.onload = () => {
         iframe.contentWindow?.focus();
@@ -110,7 +110,7 @@ export default function PackagePage() {
     <div className="min-h-screen p-6 lg:p-8 flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <div className="text-2xl font-bold text-[var(--theme-text)]">Этикетки на упаковку</div>
-        <div className="text-[10px] font-bold tracking-widest px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/40 text-emerald-500">ПРОТОТИП • 70 × 120 мм</div>
+        <div className="text-[10px] font-bold tracking-widest px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/40 text-emerald-500">ПРОТОТИП • 70 × 90 мм</div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
@@ -141,7 +141,7 @@ export default function PackagePage() {
           <div className="flex justify-center items-start bg-white border border-[var(--theme-border)] rounded-xl p-4" style={{ minHeight: 600 }}>
             {previewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              // Aspect-ratio 70/120 = 0.583, фиксирую через CSS чтобы превью
+              // Aspect-ratio 70/90 = 0.778, фиксирую через CSS чтобы превью
               // не «вытягивалось» по высоте: img иногда отображает с
               // природной шириной 559 px и не уважает height:auto в flex.
               <img
@@ -149,7 +149,7 @@ export default function PackagePage() {
                 alt="package preview"
                 style={{
                   width: "300px",
-                  aspectRatio: `${70} / ${120}`,
+                  aspectRatio: `${70} / ${90}`,
                   height: "auto",
                   objectFit: "contain",
                   display: "block",

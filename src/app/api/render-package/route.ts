@@ -21,7 +21,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 const LABEL_W_MM = 70;
-const LABEL_H_MM = 120;
+const LABEL_H_MM = 90;
 const DPI = 203;
 const PX_PER_MM = DPI / 25.4;
 const FINAL_W_PX = Math.round(LABEL_W_MM * PX_PER_MM);
