@@ -102,133 +102,116 @@ function buildPackageLabelHtml(
 <style>html, body { font-family: 'Arial', 'Helvetica', sans-serif; }</style>
 <style>
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { margin: 0; padding: 0; font-family: 'Roboto Condensed', 'Arial', sans-serif; color: black; background: white; }
+  body { margin: 0; padding: 0; font-family: 'Arial', 'Helvetica', sans-serif; color: black; background: white; }
   @page { size: ${LABEL_W_MM}mm ${LABEL_H_MM}mm; margin: 0; }
   .canvas {
     width: ${VIRTUAL_W_PX}px;
-    /* высота фиксирована — auto-fit pipeline применит scale если контент выползает */
     background: white;
     box-sizing: border-box;
-    padding: 26px 10px 18px 24px;
+    padding: 12px 18px 12px 18px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
   }
-  /* Поджать пробел между блоком «Изготовитель» и строкой СТО+иконки —
-     на референсе он минимальный, ещё меньше чем gap у canvas. */
-  .cert-and-icons { margin-top: -4px; }
-  .logo { display: flex; justify-content: center; align-items: center; }
-  .logo img { width: 380px; height: auto; display: block; }
+  .logo { display: flex; justify-content: center; align-items: center; margin-bottom: -4px; }
+  .logo img { width: 220px; height: auto; display: block; }
+  /* Заголовок — прописные, крупный жирный гротеск. text-transform:
+     uppercase преобразует name из БД («Орехи кедровые очищенные») в
+     «ОРЕХИ КЕДРОВЫЕ ОЧИЩЕННЫЕ» без правки данных. */
   .title {
-    /* Roboto Black 900 — самый жирный гротеск из набора Google Fonts.
-       Без отрицательного letter-spacing буквы дышат шире, как в макете
-       заказчика (где буквы плотные, но не сжатые). */
-    font-family: 'Roboto', 'Arial', sans-serif;
+    font-family: 'Arial Black', 'Arial', sans-serif;
     font-weight: 900;
-    font-size: 86px;
-    line-height: 0.98;
+    font-size: 44px;
+    line-height: 1.0;
     text-align: center;
-    margin-top: -8px;
+    text-transform: uppercase;
     letter-spacing: 0;
+    margin: 4px 0 6px 0;
   }
+  /* Опциональный подзаголовок (описание). Показывается только если
+     product.subtitle не пустой. */
   .subtitle {
-    font-family: 'Roboto', 'Arial', sans-serif;
-    font-weight: 900;
-    font-size: 26px;
+    font-family: 'Arial', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
     line-height: 1.1;
     text-align: center;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    margin-top: 4px;
-  }
-  .body-text {
-    font-family: 'Roboto', 'Arial', sans-serif;
-    font-weight: 700;
-    font-size: 20px;
-    line-height: 1.25;
-    text-align: justify;
-  }
-  .cert-and-icons {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 0;
-    /* Сдвигаю иконки чуть левее от правого края — на референсе они не
-       приклеены к самому краю этикетки, а имеют отступ ~10–12 мм. */
-    padding-right: 36px;
-  }
-  .cert-and-icons .cert {
-    font-family: 'Arial', sans-serif;
-    font-weight: 700;
-    font-size: 21px;
-  }
-  .icons {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  .icons .ic { height: 60px; width: auto; display: block; object-fit: contain; }
-  .icons .pet { display: block; height: 70px; }
-  .icons .pet img { display: block; height: 100%; width: auto; }
-  /* Нижняя секция: каждое поле в виде stack «маленький лейбл сверху →
-     крупное значение снизу с отступом слева». Зеркало референсного
-     макета: «Масса нетто:» на одной строке, «1000 г» — на следующей
-     крупно; «Срок годности:» → «6 месяцев»; «Дата изготовления»
-     → «(число.месяц.год)» → «00.00.00». */
-  .field { font-family: 'Roboto', 'Arial', sans-serif; font-weight: 700; line-height: 1.1; }
-  /* Split-вариант: лейбл в 2 строки слева («Масса / нетто:»), значение
-     справа на одной строке («1000 г»), выровнены по вертикали. */
-  .field.split { display: flex; align-items: center; gap: 10px; }
-  .field.split .lbl-stack { display: flex; flex-direction: column; font-size: 18px; line-height: 1.0; }
-  .field.split .lbl-stack > span { display: block; }
-  .field.split .val { font-size: 30px; font-weight: 800; white-space: nowrap; }
-  /* Stack-вариант: label сверху, value снизу прижато к левому краю без отступа. */
-  .field.stack .lbl { font-size: 18px; display: block; }
-  .field.stack .val { font-size: 30px; display: block; margin-top: 0; font-weight: 800; white-space: nowrap; }
-  .field.stack .lbl-multi { font-size: 18px; display: block; line-height: 1.15; }
-  /* Нижняя секция: слева текстовый блок (срок годности + дата), справа
-     штрихкод EAN-13. На референсе штрихкод занимает примерно правую
-     половину этикетки и сидит на одной строке с информацией. */
-  .bottom-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 16px;
     margin-top: 2px;
   }
-  /* Левая колонка ~190 px: ровно столько, чтобы «Масса нетто: 1000 г»
-     помещалось в одну строку, а «Срок годности:» + «6 месяцев» / «Дата
-     изготовления (число.месяц.год)» + «23.06.2026» — в две строки
-     (label сверху, значение снизу) без переноса самого значения. */
+  .body-text {
+    font-family: 'Arial', sans-serif;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 1.2;
+    text-align: left;
+  }
+  /* Инлайн-строка «КБЖУ …. СТО …» — весь абзац как один текст, СТО
+     сразу после точки в конце КБЖУ, чуть-чуть отступ пробелами. */
+  .nutrition-line {
+    font-family: 'Arial', sans-serif;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 1.25;
+    text-align: left;
+  }
+  .nutrition-line .cert {
+    white-space: nowrap;
+    margin-left: 8px;
+  }
+  /* Нижняя секция — три колонки в grid:
+     [срок/дата слева] [иконки центр] [масса + штрихкод справа]
+     grid-template-columns фиксирует ширину каждой колонки чтобы штрихкод
+     не распирал flex; iconки прижаты к вертикальному центру, левая и
+     правая колонки — к верхнему. */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 220px 1fr 260px;
+    align-items: start;
+    gap: 8px;
+    margin-top: 6px;
+  }
   .bottom-left {
-    flex: 0 0 200px;
-    width: 200px;
     display: flex;
     flex-direction: column;
-    gap: 0;
-    align-self: flex-start;
+    gap: 6px;
+    font-family: 'Arial', sans-serif;
+    font-weight: 400;
   }
-  .barcode-block {
-    flex: 0 0 412px;
-    width: 412px;
+  .bottom-left .lbl { font-size: 18px; line-height: 1.1; }
+  .bottom-left .val { font-size: 26px; font-weight: 700; line-height: 1.1; margin-top: 2px; white-space: nowrap; }
+  .bottom-left .lbl-multi { font-size: 18px; line-height: 1.15; }
+  .bottom-icons {
     display: flex;
-    justify-content: flex-end;
     align-items: center;
-    overflow: hidden;
-    /* Прижимаем штрихкод к правому краю bottom-row + поднимаем его вверх,
-       чтобы был на уровне левой колонки с массой/сроком/датой. */
-    margin-left: auto;
-    align-self: flex-start;
-    margin-top: 0;
+    justify-content: center;
+    gap: 8px;
+    align-self: center;
+    padding-top: 4px;
   }
-  .barcode-wrap { display: flex; align-items: center; justify-content: flex-end; width: 100%; padding-left: 7px; padding-top: 7px; box-sizing: border-box; }
-  /* Сам SVG штрихкода: ширина и высота auto от внешнего контейнера. */
-  .barcode-block svg, .barcode-block .barcode-wrap > svg {
-    width: 100% !important;
-    height: auto !important;
-    max-width: 100%;
-    display: block;
+  .bottom-icons .ic { height: 42px; width: auto; display: block; object-fit: contain; }
+  .bottom-icons .pet { display: flex; flex-direction: column; align-items: center; }
+  .bottom-icons .pet img { height: 46px; width: auto; display: block; }
+  .bottom-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
   }
+  .mass-line {
+    font-family: 'Arial', sans-serif;
+    font-weight: 400;
+    font-size: 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .mass-line .lbl { font-size: 18px; line-height: 1.0; }
+  .mass-line .val { font-size: 32px; font-weight: 700; line-height: 1.0; }
+  .barcode-wrap { width: 100%; }
+  .barcode-wrap svg { width: 100% !important; height: auto !important; display: block; }
 </style>
 </head>
 <body>
@@ -237,35 +220,35 @@ function buildPackageLabelHtml(
     ${logoSrc ? `<img src="${logoSrc}" alt="Сибирский Кедр">` : ""}
   </div>
   <div class="title">${escapeHtml(product.name)}</div>
-  <div class="subtitle">${escapeHtml(product.subtitle)}</div>
-  <div class="body-text">${escapeHtml(product.nutritionalInfo)}</div>
-  <div class="body-text">${escapeHtml(product.storageCond)}</div>
+  ${product.subtitle ? `<div class="subtitle">${escapeHtml(product.subtitle)}</div>` : ""}
   <div class="body-text">${escapeHtml(product.manufacturer)}</div>
-  <div class="cert-and-icons">
-    <div class="cert">${escapeHtml(product.certCode)}</div>
-    <div class="icons">
+  <div class="nutrition-line">
+    ${escapeHtml(product.nutritionalInfo)}
+    ${product.certCode ? `<span class="cert">${escapeHtml(product.certCode)}</span>` : ""}
+  </div>
+  <div class="body-text">${escapeHtml(product.storageCond)}</div>
+  <!-- Нижняя секция: 3 колонки {срок/дата | иконки | масса+штрихкод} -->
+  <div class="bottom-row">
+    <div class="bottom-left">
+      <div>
+        <div class="lbl">Срок годности:</div>
+        <div class="val">${escapeHtml(product.shelfLife)}</div>
+      </div>
+      <div>
+        <div class="lbl-multi">Дата изготовления<br>(число.месяц.год)</div>
+        <div class="val">${escapeHtml(mfgDate || "00.00.0000")}</div>
+      </div>
+    </div>
+    <div class="bottom-icons">
       ${eacSrc ? `<img class="ic" src="${eacSrc}" alt="EAC">` : ""}
       ${forkGlassSrc ? `<img class="ic" src="${forkGlassSrc}" alt="food-safe">` : ""}
       <div class="pet">${petHtml}</div>
     </div>
-  </div>
-  <!-- Нижняя секция: слева три строки (масса, срок, дата), справа штрихкод. -->
-  <div class="bottom-row">
-    <div class="bottom-left">
-      <div class="field split">
-        <div class="lbl-stack"><span>Масса</span><span>нетто:</span></div>
+    <div class="bottom-right">
+      <div class="mass-line">
+        <span class="lbl">Масса нетто:</span>
         <span class="val">${escapeHtml(product.netMass)}</span>
       </div>
-      <div class="field stack">
-        <span class="lbl">Срок годности:</span>
-        <span class="val">${escapeHtml(product.shelfLife)}</span>
-      </div>
-      <div class="field stack">
-        <span class="lbl-multi">Дата изготовления<br>(число.месяц.год)</span>
-        <span class="val">${escapeHtml(mfgDate || "00.00.00")}</span>
-      </div>
-    </div>
-    <div class="barcode-block">
       <div class="barcode-wrap">${barcodeSvg}</div>
     </div>
   </div>
