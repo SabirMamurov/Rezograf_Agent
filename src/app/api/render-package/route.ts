@@ -113,20 +113,20 @@ function buildPackageLabelHtml(
     flex-direction: column;
     gap: 4px;
   }
-  .logo { display: flex; justify-content: center; align-items: center; margin-bottom: -4px; }
-  .logo img { width: 220px; height: auto; display: block; }
+  .logo { display: flex; justify-content: center; align-items: center; margin-bottom: -6px; }
+  .logo img { width: 280px; height: auto; display: block; }
   /* Заголовок — прописные, крупный жирный гротеск. text-transform:
      uppercase преобразует name из БД («Орехи кедровые очищенные») в
      «ОРЕХИ КЕДРОВЫЕ ОЧИЩЕННЫЕ» без правки данных. */
   .title {
     font-family: 'Arial Black', 'Arial', sans-serif;
     font-weight: 900;
-    font-size: 44px;
+    font-size: 48px;
     line-height: 1.0;
     text-align: center;
     text-transform: uppercase;
     letter-spacing: 0;
-    margin: 4px 0 6px 0;
+    margin: 2px 0 6px 0;
   }
   /* Опциональный подзаголовок (описание). Показывается только если
      product.subtitle не пустой. */
@@ -140,78 +140,112 @@ function buildPackageLabelHtml(
     letter-spacing: 0.3px;
     margin-top: 2px;
   }
+  /* Текст «Изготовитель…», «Хранить…» — обычной жирности (500) как
+     на референсе, не bold. Крупнее (22 px) чтобы одноимённые буквы
+     не терялись после threshold+nearest-neighbor. line-height 1.3
+     обеспечивает вертикальный ритм близкий к образцу. */
   .body-text {
     font-family: 'Arial', sans-serif;
-    font-weight: 400;
-    font-size: 18px;
-    line-height: 1.2;
+    font-weight: 500;
+    font-size: 22px;
+    line-height: 1.3;
     text-align: left;
   }
-  /* Инлайн-строка «КБЖУ …. СТО …» — весь абзац как один текст, СТО
-     сразу после точки в конце КБЖУ, чуть-чуть отступ пробелами. */
+  /* Пищевая ценность + СТО — на одной строке (СТО inline после
+     ккал). Font-weight 500 узкий → СТО помещается справа от
+     «(660 ккал)» без переноса, как на референсе. */
   .nutrition-line {
     font-family: 'Arial', sans-serif;
-    font-weight: 400;
-    font-size: 18px;
-    line-height: 1.25;
+    font-weight: 500;
+    font-size: 19px;
+    line-height: 1.3;
     text-align: left;
   }
   .nutrition-line .cert {
     white-space: nowrap;
-    margin-left: 8px;
+    margin-left: 24px;
   }
   /* Нижняя секция — три колонки в grid:
      [срок/дата слева] [иконки центр] [масса + штрихкод справа]
      grid-template-columns фиксирует ширину каждой колонки чтобы штрихкод
      не распирал flex; iconки прижаты к вертикальному центру, левая и
      правая колонки — к верхнему. */
+  /* Нижняя секция — три flex-группы фиксированной ширины по своему
+     контенту (никаких grid stretch/space-between внутри ячеек,
+     которые раньше растягивали блоки шире реального контента и
+     создавали пустоты). justify-content: space-between распределяет
+     оставшееся горизонтальное место равномерно между group1↔group2
+     и group2↔group3 — визуально соответствует референсу. */
   .bottom-row {
-    display: grid;
-    grid-template-columns: 220px 1fr 260px;
-    align-items: start;
-    gap: 8px;
-    margin-top: 6px;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-top: 8px;
   }
   .bottom-left {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 14px;
+    flex-shrink: 0;
+    width: 160px;
     font-family: 'Arial', sans-serif;
-    font-weight: 400;
   }
-  .bottom-left .lbl { font-size: 18px; line-height: 1.1; }
+  .bottom-left .lbl { font-size: 18px; line-height: 1.1; font-weight: 400; }
   .bottom-left .val { font-size: 26px; font-weight: 700; line-height: 1.1; margin-top: 2px; white-space: nowrap; }
-  .bottom-left .lbl-multi { font-size: 18px; line-height: 1.15; }
+  .bottom-left .lbl-multi { font-size: 18px; line-height: 1.15; font-weight: 400; }
+  /* Иконки — столбик компактный, ширина по значку. Никакого
+     stretch, чтобы блок был ровно по контенту. */
   .bottom-icons {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
     gap: 8px;
-    align-self: center;
-    padding-top: 4px;
+    flex-shrink: 0;
+    width: 60px;
   }
-  .bottom-icons .ic { height: 42px; width: auto; display: block; object-fit: contain; }
+  .bottom-icons .ic { height: 52px; width: auto; display: block; object-fit: contain; }
   .bottom-icons .pet { display: flex; flex-direction: column; align-items: center; }
-  .bottom-icons .pet img { height: 46px; width: auto; display: block; }
+  .bottom-icons .pet img { height: 52px; width: auto; display: block; }
+  /* Правая группа — фиксированная ширина 280 px (под mass-line
+     + штрихкод), align-items: flex-end прижимает элементы к
+     правому краю ячейки. gap 6 между mass-line и штрихкодом. */
   .bottom-right {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 4px;
+    gap: 8px;
+    flex-shrink: 0;
+    width: 280px;
   }
+  /* «Масса нетто:» на референсе разбита на две строки
+     (Масса / нетто:), а «1000 г» рядом крупно. lbl-column задаёт
+     двустрочный лейбл с правым выравниванием — визуально прижат к
+     самим цифрам. */
   .mass-line {
     font-family: 'Arial', sans-serif;
-    font-weight: 400;
-    font-size: 18px;
+    font-weight: 700;
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 6px;
     white-space: nowrap;
   }
-  .mass-line .lbl { font-size: 18px; line-height: 1.0; }
-  .mass-line .val { font-size: 32px; font-weight: 700; line-height: 1.0; }
-  .barcode-wrap { width: 100%; }
-  .barcode-wrap svg { width: 100% !important; height: auto !important; display: block; }
+  .mass-line .lbl {
+    font-size: 16px;
+    line-height: 1.05;
+    text-align: right;
+    font-weight: 400;
+  }
+  .mass-line .val { font-size: 34px; font-weight: 700; line-height: 1.0; }
+  /* Штрихкод — фиксированная ширина 240 px, высота auto по aspect
+     bwip. Не растягивается по вертикали, стоит компактно под
+     mass-line как на референсе. */
+  .barcode-wrap {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+  }
+  .barcode-wrap svg { display: block; width: 100% !important; height: auto !important; }
 </style>
 </head>
 <body>
@@ -223,7 +257,7 @@ function buildPackageLabelHtml(
   ${product.subtitle ? `<div class="subtitle">${escapeHtml(product.subtitle)}</div>` : ""}
   <div class="body-text">${escapeHtml(product.manufacturer)}</div>
   <div class="nutrition-line">
-    ${escapeHtml(product.nutritionalInfo)}
+    ${escapeHtml(product.nutritionalInfo).replace(/(\(калорийность\):\s*)/, "$1<br>")}
     ${product.certCode ? `<span class="cert">${escapeHtml(product.certCode)}</span>` : ""}
   </div>
   <div class="body-text">${escapeHtml(product.storageCond)}</div>
@@ -246,7 +280,7 @@ function buildPackageLabelHtml(
     </div>
     <div class="bottom-right">
       <div class="mass-line">
-        <span class="lbl">Масса нетто:</span>
+        <span class="lbl">Масса<br>нетто:</span>
         <span class="val">${escapeHtml(product.netMass)}</span>
       </div>
       <div class="barcode-wrap">${barcodeSvg}</div>
@@ -277,14 +311,19 @@ export async function POST(req: NextRequest) {
   // делает эту разметку САМ если не переопределять textfont/textxalign
   // и оставить дефолтный textsize. Только подкручиваю scale и height
   // чтобы штрихкод занимал нужное место.
+  // Штрихкод расширен до всей ширины правой колонки (~408 px).
+  // Чтобы высота осталась близкой к прежней ~110 px, уменьшил
+  // параметр bwip `height` 30 → 22 (короче bars в intrinsic units).
+  // Ширина bars от scale=4 сохранена — сканер по-прежнему считывает
+  // EAN-13 корректно.
   const barcodeSvg = (bwipjs as unknown as { toSVG: (opts: Record<string, unknown>) => string }).toSVG({
     bcid: "ean13",
     text: product.barcodeEan13,
     scale: 4,
-    height: 13,
+    height: 22,
     includetext: true,
-    textsize: 9,
-    paddingwidth: 4,
+    textsize: 12,
+    paddingwidth: 2,
     paddingheight: 2,
   });
   const logoSrc = loadLogoDataUri();

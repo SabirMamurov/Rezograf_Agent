@@ -128,3 +128,30 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// Аудит печати — кто, что и сколько раз распечатал. Пишется из
+// /api/render на каждый успешный ответ. Показывается в /print под
+// кнопкой «📊 История печати» (появляется только в edit-режиме).
+// Отдельно от ActivityLog — там аудит правок каталога.
+model PrintHistory {
+  id             String   @id @default(uuid())
+  createdAt      DateTime @default(now())
+  ip             String?
+  userAgent      String?
+  productId      String?
+  productName    String?
+  barcode        String?
+  format         String   @default("image")   // "image" | "pdf"
+  copies         Int      @default(1)
+  sizeBytes      Int?
+  renderTimeMs   Int?
+}
+
+// Псевдонимы IP-адресов — оператор ставит понятное имя, потому что по
+// голому 192.168.242.15 нельзя понять кто печатал. Читается в модалке
+// «История печати»: если для IP задан alias — показываем name, иначе IP.
+model IpAlias {
+  ip        String   @id
+  name      String
+  updatedAt DateTime @updatedAt
+}

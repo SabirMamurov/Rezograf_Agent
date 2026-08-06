@@ -171,7 +171,32 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { productId, mfgDate, expDate, format, productOverride } = body;
+  const { productId, mfgDate, expDate, format, productOverride, copies } = body;
+  const _renderStartMs = Date.now();
+
+  // best-effort журнал печати — пишем после успешного рендера.
+  // productName/barcode берём из product в конце, чтобы не читать 2 раза.
+  const _logPrint = async (payload: Uint8Array | Buffer, fmt: string, p: {name?: string; id?: string; barcodeEan13?: string}) => {
+    try {
+      const xff = req.headers.get("x-forwarded-for") || "";
+      const ip = xff.split(",")[0].trim() || req.headers.get("x-real-ip") || null;
+      const ua = req.headers.get("user-agent") || null;
+      await (prisma as unknown as {printHistory: {create: (a: {data: Record<string, unknown>}) => Promise<unknown>}}).printHistory.create({
+        data: {
+          ip, userAgent: ua,
+          productId: p.id || null,
+          productName: p.name || null,
+          barcode: p.barcodeEan13 || null,
+          format: fmt,
+          copies: Math.max(1, Number(copies) || 1),
+          sizeBytes: payload?.byteLength || null,
+          renderTimeMs: Date.now() - _renderStartMs,
+        },
+      });
+    } catch (e) {
+      console.warn("[PrintHistory] log failed:", e);
+    }
+  };
 
   // productOverride path — used by /vkusvill (and any future "synthetic"
   // products that don't live in the catalogue DB). The caller hands the
@@ -476,7 +501,9 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return new NextResponse(new Uint8Array(monoPngBuffer), {
+      const _img = new Uint8Array(monoPngBuffer);
+      _logPrint(_img, "image", product);
+      return new NextResponse(_img, {
         headers: {
           "Content-Type": "image/png",
           "Content-Disposition": contentDisposition(`label-${product.sku || product.id}.png`),
@@ -493,7 +520,9 @@ export async function POST(req: NextRequest) {
       pageRanges: "1",
     });
 
-    return new NextResponse(Buffer.from(pdfBuffer), {
+    const _pdf = Buffer.from(pdfBuffer);
+    _logPrint(_pdf, "pdf", product);
+    return new NextResponse(_pdf, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": contentDisposition(`label-${product.sku || product.id}.pdf`),

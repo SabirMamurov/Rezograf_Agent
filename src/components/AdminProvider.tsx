@@ -8,12 +8,14 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import PrintHistoryModal from "@/components/PrintHistoryModal";
 
 type AdminContextValue = {
   isAdmin: boolean;
   loading: boolean;
   openPrompt: () => void;
   lock: () => Promise<void>;
+  openPrintHistory: () => void;
 };
 
 const AdminContext = createContext<AdminContextValue | null>(null);
@@ -32,6 +34,11 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Модалка «История печати» — открывается из Sidebar (кнопка над
+  // «Только просмотр»/«Редактирование»), доступна с любой страницы.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const openPrintHistory = useCallback(() => setHistoryOpen(true), []);
 
   // On mount ask the server whether this browser already carries a valid
   // admin cookie (the operator may have unlocked earlier — it persists ~90d).
@@ -97,8 +104,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AdminContext.Provider value={{ isAdmin, loading, openPrompt, lock }}>
+    <AdminContext.Provider value={{ isAdmin, loading, openPrompt, lock, openPrintHistory }}>
       {children}
+
+      <PrintHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        isAdmin={isAdmin}
+      />
 
       {promptOpen && (
         <div

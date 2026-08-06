@@ -307,6 +307,7 @@ export default function PrintPage() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingLabel, setIsCreatingLabel] = useState(false);
+  // Модалка «История печати» переехала в AdminProvider — открывается из Sidebar.
   const [createForm, setCreateForm] = useState<Partial<Product>>({});
   const [creatingItem, setCreatingItem] = useState(false);
   const [deletingItem, setDeletingItem] = useState(false);
@@ -2372,6 +2373,9 @@ export default function PrintPage() {
         </div>
       )}
 
+      {/* Модалка «История печати» переехала в AdminProvider —
+          доступна с любой страницы через Sidebar. */}
+
       {/* CREATE LABEL MODAL */}
       {isCreatingLabel && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsCreatingLabel(false)}>
@@ -2773,3 +2777,4 @@ export default function PrintPage() {
     </div>
   );
 }
+

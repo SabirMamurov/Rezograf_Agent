@@ -51,7 +51,7 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [isLight, setIsLight] = useState(true);
-  const { isAdmin, openPrompt, lock } = useAdmin();
+  const { isAdmin, openPrompt, lock, openPrintHistory } = useAdmin();
 
   // `usePathname` на SSR и client может отличаться у Next.js App Router
   // (особенно во время dev/HMR). Сам Next.js на новый прокачанный pathname
@@ -139,6 +139,21 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* История печати — доступна только в edit-режиме, стоит над
+          кнопкой «Редактирование»/«Только просмотр». */}
+      {isAdmin && (
+        <div className="px-4 pb-2">
+          <button
+            onClick={openPrintHistory}
+            title="Кто, что, сколько и когда напечатал"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wide bg-indigo-500/10 text-indigo-500 border border-indigo-500/30 hover:bg-indigo-500/20 transition-all cursor-pointer"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 4 3 5-6"/></svg>
+            История печати
+          </button>
+        </div>
+      )}
+
       {/* Edit-mode gate. Locked = view-only (search + change date + print).
           Click to enter the password; once unlocked it stays for ~90 days on
           this device, so operators never re-type it. */}
@@ -170,7 +185,7 @@ export default function Sidebar() {
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-surface)] to-transparent pointer-events-none"></div>
         <Link href="/changelog" className={`text-[11px] font-medium tracking-wide relative z-10 flex items-center gap-2 no-underline transition-colors ${activePath === '/changelog' ? 'text-indigo-500' : 'text-[var(--theme-text-muted, var(--color-text-muted))] hover:text-[var(--theme-text)]'}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></span>
-          v1.4.35
+          v1.4.46
         </Link>
         
         {/* Theme Toggle */}

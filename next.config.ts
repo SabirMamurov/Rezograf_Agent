@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
-  allowedDevOrigins: ["192.168.242.112"],
+  allowedDevOrigins: ["192.168.242.112", "127.0.0.1", "localhost"],
   // Next 16 ships `Cache-Control: s-maxage=31536000` for SSG pages, so
   // operator browsers reuse last week's HTML across deploys — when the
   // server bundle changes, the cached HTML still references the old
