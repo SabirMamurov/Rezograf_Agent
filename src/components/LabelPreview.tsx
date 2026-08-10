@@ -179,17 +179,14 @@ export default function LabelPreview({
           /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
   // Показывать ли блок дат — зеркало логики в /api/render/route.ts.
-  // null → авто по btwFilePath (весовые папки → скрыть); true/false —
-  // явное переопределение.
+  // null → авто по btwFilePath (весовые папки → компактный блок ≤40×16 мм,
+  // значения показаны, снизу остаётся место под «Честный знак»);
+  // true/false — явное переопределение.
   const isWeightFolder =
     typeof product?.btwFilePath === "string" &&
     /\\[^\\]*[Ее]совые?[^\\]*\\/i.test(product.btwFilePath);
-  const showLabelDates =
-    product?.showLabelDates === true
-      ? true
-      : product?.showLabelDates === false
-        ? false
-        : !isWeightFolder;
+  const showLabelDates = product?.showLabelDates !== false;
+  const compactDates = isWeightFolder && product?.showLabelDates !== true;
 
   // ШК (showbox barcode-only) labels: either the product is explicitly
   // flagged via the inspector edit form, or its btwFilePath sits under
@@ -750,16 +747,29 @@ export default function LabelPreview({
             </div>
           )}
 
-          {/* Блок дат. Лейблы всегда видны; при showLabelDates=false
-              значения пусты — освобождается место под стикер «Честный
-              знак». Mirror /api/render/route.ts. */}
-          <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
-            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
-            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{showLabelDates ? (mfgDate || "—") : ""}</div>
+          {/* Блок дат.
+              • Обычный товар — крупный блок в углу.
+              • Весовые (auto) — КОМПАКТНЫЙ блок ≤40×16 мм; снизу
+                остаётся ~130 px пустого поля под стикер «Честного
+                знака». Оператор форсирует полный размер showLabelDates=true.
+              Mirror /api/render/route.ts. */}
+          {compactDates ? (
+            <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "4px", alignItems: "center", marginTop: "auto", paddingTop: "12px", maxWidth: "400px", maxHeight: "160px" }}>
+              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
+              <div style={{ fontSize: "18px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", color: "#000", whiteSpace: "nowrap" }}>{showLabelDates ? (mfgDate || "—") : ""}</div>
 
-            <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
-            <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{showLabelDates ? (expDate || "—") : ""}</div>
-          </div>
+              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
+              <div style={{ fontSize: "18px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", color: "#000", whiteSpace: "nowrap" }}>{showLabelDates ? (expDate || "—") : ""}</div>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
+              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
+              <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{showLabelDates ? (mfgDate || "—") : ""}</div>
+
+              <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
+              <div style={{ fontSize: "36px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", letterSpacing: "-1px", color: "#000" }}>{showLabelDates ? (expDate || "—") : ""}</div>
+            </div>
+          )}
         </div>
       </div>
     </div>

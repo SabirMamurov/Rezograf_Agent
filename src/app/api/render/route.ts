@@ -379,10 +379,11 @@ export async function POST(req: NextRequest) {
       !!product?.isShkLabel ||
       (typeof product?.btwFilePath === "string" && /\\Единичный ШК\\/i.test(product.btwFilePath));
 
-    // Grow-path тоже пропускаем, когда даты явно скрыты (весовые товары
-    // под «Честный знак») — иначе освобождённое место снизу тут же
-    // съедалось бы растянутым до 97% высоты контентом, а нам нужно
-    // оставить пустое поле под будущий стикер.
+    // Grow-path пропускаем и когда даты явно скрыты (showLabelDates=false),
+    // и когда весовой товар в auto-режиме — там компактный блок дат уже
+    // сверху, а снизу оставляем ~130 px пустого поля под стикер «Честный
+    // знак» (иначе grow растянул бы контент до 97% высоты и стикер
+    // клеить некуда).
     const isWeightFolderForScale =
       typeof product?.btwFilePath === "string" &&
       /\\[^\\]*[Ее]совые?[^\\]*\\/i.test(product.btwFilePath);
@@ -870,21 +871,22 @@ function buildLabelHtml(
           /(\\Цех ПЦО\\Орехи\\ИП Абдуалиев\\|\\МП\\ПЦПО\\)/i.test(product.btwFilePath);
 
   // Показывать ли блок с датами «Дата изготовления» / «Годен до».
-  //   product.showLabelDates === true  → всегда показать
-  //   product.showLabelDates === false → всегда скрыть
-  //   null/undefined                   → авто: скрыть для товаров в весовых
-  //                                       папках (готовим место под будущий
-  //                                       «Честный знак»), показать остальным.
+  //   product.showLabelDates === true  → всегда показать (полный размер)
+  //   product.showLabelDates === false → всегда скрыть значения (только лейблы)
+  //   null/undefined                   → авто:
+  //                                       • для весовых папок — показать в
+  //                                         КОМПАКТНОМ режиме (блок ≤40×16 мм),
+  //                                         снизу остаётся место под стикер
+  //                                         «Честного знака»;
+  //                                       • для остальных — полный размер.
   // Keep aligned with src/components/LabelPreview.tsx.
   const isWeightFolder =
     typeof product?.btwFilePath === "string" &&
     /\\[^\\]*[Ее]совые?[^\\]*\\/i.test(product.btwFilePath);
-  const showLabelDates =
-    product?.showLabelDates === true
-      ? true
-      : product?.showLabelDates === false
-        ? false
-        : !isWeightFolder;
+  const showLabelDates = product?.showLabelDates !== false;
+  // Компактный блок дат: весовые товары в auto-режиме. Оператор может
+  // включить полный размер явным showLabelDates=true.
+  const compactDates = isWeightFolder && product?.showLabelDates !== true;
 
   // ШК (showbox barcode-only) labels: either the product is explicitly
   // flagged via the `isShkLabel` column (set from the inspector edit
@@ -1154,12 +1156,24 @@ ${fontStyleBlock}
       </div>
       ` : ''}
 
-      <!-- Dates block. Лейблы «Дата изготовления:» и «Годен до:»
-           показываются всегда. Сами значения дат рендерятся только при
-           showLabelDates=true; при false ячейка со значением остаётся
-           пустой (grid-структура и высота не меняются), чтобы освободить
-           место под будущий стикер «Честный знак», но само место с
-           лейблами остаётся визуально таким же. -->
+      <!-- Dates block.
+           • Обычный товар — крупный блок в углу, значения дат либо
+             показаны либо пусты (при showLabelDates=false лейблы всё
+             равно остаются, чтобы вертикальный ритм не сдвигался).
+           • Весовые папки в auto-режиме — КОМПАКТНЫЙ блок ≤ 40×16 мм
+             (max-width 400px × max-height 160px в виртуальной 700×900
+             системе), снизу остаётся ~130 px пустого поля под стикер
+             «Честного знака». Оператор может форсировать полный
+             размер полем showLabelDates=true в инспекторе. -->
+      ${compactDates ? `
+      <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 4px; align-items: center; margin-top: auto; padding-top: 12px; max-width: 400px; max-height: 160px;">
+        <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Дата изготовления:</div>
+        <div style="font-size: 18px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; color: #000; white-space: nowrap;">${showLabelDates ? escapeHtml(mfgDate || "—") : ""}</div>
+
+        <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Годен до:</div>
+        <div style="font-size: 18px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; color: #000; white-space: nowrap;">${showLabelDates ? escapeHtml(expDate || "—") : ""}</div>
+      </div>
+      ` : `
       <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Дата изготовления:</div>
         <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${showLabelDates ? escapeHtml(mfgDate || "—") : ""}</div>
@@ -1167,6 +1181,7 @@ ${fontStyleBlock}
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Годен до:</div>
         <div style="font-size: 36px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; letter-spacing: -1px; color: #000;">${showLabelDates ? escapeHtml(expDate || "—") : ""}</div>
       </div>
+      `}
       </div>
     </div>
   </div>
