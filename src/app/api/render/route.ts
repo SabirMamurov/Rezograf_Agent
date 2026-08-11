@@ -1168,10 +1168,10 @@ ${fontStyleBlock}
       ${compactDates ? `
       <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 4px; align-items: center; margin-top: auto; padding-top: 12px; max-width: 400px; max-height: 160px;">
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Дата изготовления:</div>
-        <div style="font-size: 18px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; color: #000; white-space: nowrap;">${showLabelDates ? escapeHtml(mfgDate || "—") : ""}</div>
+        <div style="font-size: 30px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; color: #000; white-space: nowrap;">${showLabelDates ? escapeHtml(mfgDate || "—") : ""}</div>
 
         <div style="font-size: 24px; color: #000; font-weight: 900; white-space: nowrap; font-family: 'Roboto Condensed', sans-serif;">Годен до:</div>
-        <div style="font-size: 18px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; color: #000; white-space: nowrap;">${showLabelDates ? escapeHtml(expDate || "—") : ""}</div>
+        <div style="font-size: 30px; font-weight: 900; font-family: 'Roboto Condensed', sans-serif; color: #000; white-space: nowrap;">${showLabelDates ? escapeHtml(expDate || "—") : ""}</div>
       </div>
       ` : `
       <div style="display: grid; grid-template-columns: max-content max-content; column-gap: 12px; row-gap: 15px; align-items: center; margin-top: auto; margin-bottom: -10px; padding-top: 15px;">

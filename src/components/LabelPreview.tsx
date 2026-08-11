@@ -756,10 +756,10 @@ export default function LabelPreview({
           {compactDates ? (
             <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "4px", alignItems: "center", marginTop: "auto", paddingTop: "12px", maxWidth: "400px", maxHeight: "160px" }}>
               <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Дата изготовления:</div>
-              <div style={{ fontSize: "18px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", color: "#000", whiteSpace: "nowrap" }}>{showLabelDates ? (mfgDate || "—") : ""}</div>
+              <div style={{ fontSize: "30px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", color: "#000", whiteSpace: "nowrap" }}>{showLabelDates ? (mfgDate || "—") : ""}</div>
 
               <div style={{ fontSize: "24px", color: "#000", fontWeight: 900, whiteSpace: "nowrap", fontFamily: "'Roboto Condensed', sans-serif" }}>Годен до:</div>
-              <div style={{ fontSize: "18px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", color: "#000", whiteSpace: "nowrap" }}>{showLabelDates ? (expDate || "—") : ""}</div>
+              <div style={{ fontSize: "30px", fontWeight: 900, fontFamily: "'Roboto Condensed', sans-serif", color: "#000", whiteSpace: "nowrap" }}>{showLabelDates ? (expDate || "—") : ""}</div>
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "max-content max-content", columnGap: "12px", rowGap: "15px", alignItems: "center", marginTop: "auto", marginBottom: "-10px", paddingTop: "15px" }}>
