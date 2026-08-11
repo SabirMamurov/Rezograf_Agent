@@ -431,12 +431,6 @@ export default function PrintPage() {
   const effectiveStorageCond = shelfLifeOverride !== null
     ? applyShelfLifeToStorageCond(selected?.storageCond ?? null, shelfLifeOverride)
     : (selected?.storageCond ?? null);
-  const previewProduct = useMemo(
-    () => (selected && shelfLifeOverride !== null
-      ? { ...selected, storageCond: effectiveStorageCond }
-      : selected),
-    [selected, shelfLifeOverride, effectiveStorageCond],
-  );
 
   const { mfgDateFormatted, expDateFormatted, autoExpDateStr } = useMemo(() => {
     if (!mfgDateStr) {
@@ -2351,7 +2345,9 @@ export default function PrintPage() {
                      <div ref={labelRef} className="scale-[0.8] sm:scale-90 origin-center transform-gpu transition-all z-10 p-4 bg-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
                       <div className="ring-1 ring-black/10 rounded overflow-hidden">
                         <LabelPreview
-                          product={previewProduct}
+                          product={shelfLifeOverride !== null
+                            ? { ...selected, storageCond: effectiveStorageCond }
+                            : selected}
                           barcodeSvg={barcodeSvg}
                           widthMm={70}
                           heightMm={90}
