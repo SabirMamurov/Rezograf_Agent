@@ -2294,15 +2294,28 @@ export default function PrintPage() {
                               </button>
                             );
                           })}
-                          {/* Показываем текущий срок из storageCond если он не 6/9/12 —
-                              чтобы оператор видел что было изначально */}
-                          {![6, 9, 12].includes(autoShelfMonths) && shelfLifeOverride === null && (
-                            <span
-                              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border border-[var(--theme-border)]"
-                              title="Срок из поля «Срок и условия» — не совпадает с быстрыми кнопками"
+                          {/* Кнопка исходного (auto) значения — показываем ВСЕГДА,
+                              даже когда исходный срок = 6/9/12. Так у оператора
+                              есть явная точка возврата вместо непонятного
+                              «двойной клик = сброс». Особенно важно для 18/24/…
+                              мес — там кнопки 6/9/12 нет, и без этой ссылки
+                              вернуться к 24 мес было невозможно (баг v1.4.50). */}
+                          {(shelfLifeOverride !== null || ![6, 9, 12].includes(autoShelfMonths)) && (
+                            <button
+                              type="button"
+                              onClick={() => setShelfLifeOverride(null)}
+                              disabled={shelfLifeOverride === null}
+                              title={shelfLifeOverride !== null
+                                ? `Вернуть исходный срок ${autoShelfMonths} мес (из «Срок и условия»)`
+                                : `Исходный срок из «Срок и условия»: ${autoShelfMonths} мес`}
+                              className={`text-[10px] font-bold tabular-nums px-2 py-0.5 rounded border transition-all ${
+                                shelfLifeOverride !== null
+                                  ? "bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border-[var(--theme-border)] hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/30 cursor-pointer"
+                                  : "bg-indigo-500/15 text-indigo-500 border-indigo-500/40 cursor-default"
+                              }`}
                             >
                               {autoShelfMonths}
-                            </span>
+                            </button>
                           )}
                           {isExpDateManual && (
                             <button
