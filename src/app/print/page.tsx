@@ -2155,7 +2155,23 @@ export default function PrintPage() {
                         <div className="flex flex-col border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1">Спонсор</span><span className="text-xs text-[var(--theme-text)]">{selected.sponsorText}</span></div>
                       )}
                       {selected.storageCond && (
-                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Срок и условия </span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.storageCond}</span></div>
+                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1">
+                          <span className="text-[var(--theme-text-muted)] text-xs mb-1.5 flex items-center gap-2">
+                            Срок и условия
+                            {shelfLifeOverride !== null && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20" title={`Число месяцев переопределено на ${shelfLifeOverride}. В БД не сохраняется.`}>
+                                override {shelfLifeOverride} мес
+                              </span>
+                            )}
+                          </span>
+                          <span className={`text-xs text-[var(--theme-text)] leading-relaxed p-2 rounded-lg border ${
+                            shelfLifeOverride !== null
+                              ? "bg-amber-500/5 border-amber-500/30"
+                              : "bg-[var(--theme-input-bg)] border-[var(--theme-border)]"
+                          }`}>
+                            {effectiveStorageCond ?? selected.storageCond}
+                          </span>
+                        </div>
                       )}
                       {selected.composition && (
                         <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Состав</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap">{selected.composition}</span></div>
