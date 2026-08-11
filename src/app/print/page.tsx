@@ -229,6 +229,11 @@ export default function PrintPage() {
   // override and goes back to auto. Reset to null whenever the operator
   // switches to a different product.
   const [expDateOverrideStr, setExpDateOverrideStr] = useState<string | null>(null);
+  // Shelf-life quick-switch (в месяцах). Оператор может нажать 6 / 9 / 12
+  // в блоке печати — тогда используется это число вместо автоматически
+  // распарсенного из storageCond. Живёт только в рамках сессии печати
+  // текущего товара, сбрасывается на новый товар. Не пишется в БД.
+  const [shelfLifeOverride, setShelfLifeOverride] = useState<number | null>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   
   const [isEditing, setIsEditing] = useState(false);
@@ -395,19 +400,21 @@ export default function PrintPage() {
     };
   }, [mfgDateAuto]);
 
+  const autoShelfMonths = parseShelfLifeMonths(selected?.storageCond ?? null);
+  const effectiveShelfMonths = shelfLifeOverride ?? autoShelfMonths;
+
   const { mfgDateFormatted, expDateFormatted, autoExpDateStr } = useMemo(() => {
     if (!mfgDateStr) {
       return { mfgDateFormatted: "...", expDateFormatted: "...", autoExpDateStr: "" };
     }
     const mfg = new Date(mfgDateStr + "T00:00:00");
-    const months = parseShelfLifeMonths(selected?.storageCond ?? null);
     const auto = new Date(mfg);
     // Treat 1 month as a fixed 30 days. The previous setMonth() approach
     // followed the calendar (May→Sep keeps the same day-of-month), but real
     // months are 28-31 days, so the actual elapsed time varied by ±2 days
     // depending on which months the shelf life crossed. Operators expect
     // "4 месяца" = exactly 120 days regardless of mfg date.
-    auto.setDate(auto.getDate() + months * 30);
+    auto.setDate(auto.getDate() + effectiveShelfMonths * 30);
     // If the operator manually overrode the use-by date, that wins; otherwise
     // we use the auto-computed one.
     const exp = expDateOverrideStr
@@ -418,7 +425,7 @@ export default function PrintPage() {
       expDateFormatted: formatDate(exp),
       autoExpDateStr: toInputDate(auto),
     };
-  }, [mfgDateStr, selected?.storageCond, expDateOverrideStr]);
+  }, [mfgDateStr, effectiveShelfMonths, expDateOverrideStr]);
 
   const isExpDateManual = expDateOverrideStr !== null;
   // Value for <input type="date">. When override is active show that, otherwise
@@ -544,6 +551,7 @@ export default function PrintPage() {
     // Same logic for the use-by override: don't carry a one-off override
     // from one label onto the next.
     setExpDateOverrideStr(null);
+    setShelfLifeOverride(null);
   };
 
   // Highlight matched substring in search results (case-insensitive)
@@ -581,12 +589,12 @@ export default function PrintPage() {
         const today = new Date(todayInput + "T00:00:00");
         mfgToPrint = formatDate(today);
         if (expDateOverrideStr === null) {
-          const months = parseShelfLifeMonths(selected?.storageCond ?? null);
           const auto = new Date(today);
           // Тот же 30-дней/мес алгоритм что и в useMemo — иначе превью и
           // печать разошлись бы. Календарный setMonth здесь давал ±3
           // дня разницы против 30-дневного расчёта наверху.
-          auto.setDate(auto.getDate() + months * 30);
+          // effectiveShelfMonths учитывает быстрый переключатель 6/9/12.
+          auto.setDate(auto.getDate() + effectiveShelfMonths * 30);
           expToPrint = formatDate(auto);
         }
         setMfgDateStr(todayInput);
@@ -2211,23 +2219,67 @@ export default function PrintPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1.5 min-h-[18px] gap-2">
                         <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] tracking-wider">ГОДЕН ДО</label>
-                        {isExpDateManual ? (
-                          <button
-                            type="button"
-                            onClick={() => setExpDateOverrideStr(null)}
-                            title="Сбросить к автоматической дате (изготовление + срок хранения)"
-                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 cursor-pointer transition-all flex items-center gap-1"
-                          >
-                            ↺ Авто
-                          </button>
-                        ) : (
-                          <span
-                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border border-[var(--theme-border)]"
-                            title="Срок хранения, считанный из поля «Срок и условия»"
-                          >
-                            {parseShelfLifeMonths(selected.storageCond)} мес
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {/* Quick-switch срока хранения 6/9/12 мес. Активная —
+                              та что совпадает с effectiveShelfMonths. Клик
+                              переключает; клик по уже-активной override → сброс
+                              к авто (парсеру из storageCond). Ручной override
+                              даты (expDateOverrideStr) сбрасывается заодно —
+                              иначе он бы победил и пересчёт не поменял бы дату. */}
+                          {[6, 9, 12].map((m) => {
+                            const isActive = effectiveShelfMonths === m;
+                            const isOverrideOnThis = shelfLifeOverride === m;
+                            return (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => {
+                                  if (isOverrideOnThis || m === autoShelfMonths) {
+                                    // Клик на override той же цифры — снимаем.
+                                    // Клик на цифру, совпадающую с auto, тоже
+                                    // просто снимаем override (иначе визуально
+                                    // ничего не меняется, а бейдж становится
+                                    // амберным, что путает оператора).
+                                    setShelfLifeOverride(null);
+                                  } else {
+                                    setShelfLifeOverride(m);
+                                    setExpDateOverrideStr(null);
+                                  }
+                                }}
+                                title={isOverrideOnThis ? "Клик — вернуть автоматический срок" : `Поставить срок ${m} мес`}
+                                className={`text-[10px] font-bold tabular-nums px-2 py-0.5 rounded border transition-all cursor-pointer ${
+                                  isActive
+                                    ? isOverrideOnThis
+                                      ? "bg-amber-500/15 text-amber-500 border-amber-500/40"
+                                      : "bg-indigo-500/15 text-indigo-500 border-indigo-500/40"
+                                    : "bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border-[var(--theme-border)] hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/30"
+                                }`}
+                              >
+                                {m}
+                              </button>
+                            );
+                          })}
+                          {/* Показываем текущий срок из storageCond если он не 6/9/12 —
+                              чтобы оператор видел что было изначально */}
+                          {![6, 9, 12].includes(autoShelfMonths) && shelfLifeOverride === null && (
+                            <span
+                              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border border-[var(--theme-border)]"
+                              title="Срок из поля «Срок и условия» — не совпадает с быстрыми кнопками"
+                            >
+                              {autoShelfMonths}
+                            </span>
+                          )}
+                          {isExpDateManual && (
+                            <button
+                              type="button"
+                              onClick={() => setExpDateOverrideStr(null)}
+                              title="Сбросить ручную дату к автоматическому расчёту"
+                              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 cursor-pointer transition-all"
+                            >
+                              ↺ Авто
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <input
                         type="date"
