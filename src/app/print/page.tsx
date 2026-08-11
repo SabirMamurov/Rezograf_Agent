@@ -249,11 +249,10 @@ export default function PrintPage() {
   // override and goes back to auto. Reset to null whenever the operator
   // switches to a different product.
   const [expDateOverrideStr, setExpDateOverrideStr] = useState<string | null>(null);
-  // Shelf-life quick-switch (в месяцах). Оператор может нажать 6 / 9 / 12
-  // в блоке печати — тогда используется это число вместо автоматически
-  // распарсенного из storageCond. Живёт только в рамках сессии печати
-  // текущего товара, сбрасывается на новый товар. Не пишется в БД.
-  const [shelfLifeOverride, setShelfLifeOverride] = useState<number | null>(null);
+  // Shelf-life quick-switch пишет прямо в БД (PUT /api/products/[id]).
+  // savingShelf = месяцы, которые сейчас летят на сервер — используется
+  // для оптимистичного disable кнопки и лоадер-состояния. null = не в полёте.
+  const [savingShelf, setSavingShelf] = useState<number | null>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   
   const [isEditing, setIsEditing] = useState(false);
@@ -420,17 +419,11 @@ export default function PrintPage() {
     };
   }, [mfgDateAuto]);
 
+  // Актуальный срок — прямо из товара (после клика по 6/9/12/N мы уже
+  // обновили product.storageCond в БД + локальном state, эфемерного
+  // override больше нет).
   const autoShelfMonths = parseShelfLifeMonths(selected?.storageCond ?? null);
-  const effectiveShelfMonths = shelfLifeOverride ?? autoShelfMonths;
-  // Если оператор нажал 6/9/12 — подменяем число в самом тексте
-  // storageCond («Срок годности 6 месяцев» → «Срок годности 9 месяцев»).
-  // Иначе печатаемое условие противоречит дате «Годен до» — оператор
-  // видит «Срок годности 6 мес» и «Годен до 06.08.2027 (+12 мес)».
-  // Только в оверрайд-режиме — при auto шлём как есть, чтобы не задевать
-  // товары с нестандартной формулировкой storageCond.
-  const effectiveStorageCond = shelfLifeOverride !== null
-    ? applyShelfLifeToStorageCond(selected?.storageCond ?? null, shelfLifeOverride)
-    : (selected?.storageCond ?? null);
+  const effectiveShelfMonths = autoShelfMonths;
 
   const { mfgDateFormatted, expDateFormatted, autoExpDateStr } = useMemo(() => {
     if (!mfgDateStr) {
@@ -461,6 +454,43 @@ export default function PrintPage() {
   // pre-populate with the auto value so the operator can tweak from a sensible
   // starting point with one click on the date picker.
   const expDateInputStr = expDateOverrideStr ?? autoExpDateStr;
+
+  // Быстрое изменение срока годности из блока печати (кнопки 6/9/12/N).
+  // ПИШЕТ В БД — оператор нажал раз, дальше все партии этого товара печатаются
+  // с новым сроком, пока кто-то опять не поменяет. Раньше был эфемерный
+  // override (v1.4.49–1.4.52) — но операторы теряли значение при обновлении
+  // страницы и просили сохранять.
+  const saveShelfLife = useCallback(async (months: number) => {
+    if (!selected) return;
+    const currentMonths = parseShelfLifeMonths(selected.storageCond ?? null);
+    if (currentMonths === months) return;
+    const newCond = applyShelfLifeToStorageCond(selected.storageCond ?? null, months);
+    if (!newCond || newCond === selected.storageCond) return;
+    const snapshot = selected.storageCond;
+    setSavingShelf(months);
+    // Оптимистично применяем — превью и этикетка сразу с новым сроком.
+    setSelected(prev => prev ? { ...prev, storageCond: newCond } : prev);
+    setFolderProducts(prev => prev.map(p => p.id === selected.id ? { ...p, storageCond: newCond } : p));
+    try {
+      const res = await fetch(`/api/products/${selected.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: selected.name, storageCond: newCond }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const updated = await res.json();
+      setSelected(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev);
+      setFolderProducts(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+      setToast({ type: "success", message: `Срок годности: ${months} мес — сохранено` });
+    } catch {
+      // Rollback оптимизма
+      setSelected(prev => prev ? { ...prev, storageCond: snapshot ?? null } : prev);
+      setFolderProducts(prev => prev.map(p => p.id === selected.id ? { ...p, storageCond: snapshot ?? null } : p));
+      setToast({ type: "error", message: "Не удалось сохранить срок годности" });
+    } finally {
+      setSavingShelf(null);
+    }
+  }, [selected]);
 
   const loadFolderData = () => {
     setLoading(true);
@@ -580,7 +610,6 @@ export default function PrintPage() {
     // Same logic for the use-by override: don't carry a one-off override
     // from one label onto the next.
     setExpDateOverrideStr(null);
-    setShelfLifeOverride(null);
   };
 
   // Highlight matched substring in search results (case-insensitive)
@@ -657,9 +686,6 @@ export default function PrintPage() {
           mfgDate: mfgToPrint,
           expDate: expToPrint,
           format: "image",
-          ...(shelfLifeOverride !== null && effectiveStorageCond != null
-            ? { storageCondOverride: effectiveStorageCond }
-            : {}),
         }),
       });
 
@@ -765,7 +791,7 @@ export default function PrintPage() {
       setToast({ type: "error", message: e.message || "Ошибка печати." });
       setRendering(false);
     }
-  }, [selected, mfgDateFormatted, expDateFormatted, mfgDateAuto, mfgDateStr, expDateOverrideStr, shelfLifeOverride, effectiveStorageCond, effectiveShelfMonths]);
+  }, [selected, mfgDateFormatted, expDateFormatted, mfgDateAuto, mfgDateStr, expDateOverrideStr, effectiveShelfMonths]);
 
   const handleRenderPdf = async () => {
     if (!selected) return;
@@ -778,9 +804,6 @@ export default function PrintPage() {
           productId: selected.id,
           mfgDate: mfgDateFormatted,
           expDate: expDateFormatted,
-          ...(shelfLifeOverride !== null && effectiveStorageCond != null
-            ? { storageCondOverride: effectiveStorageCond }
-            : {}),
         }),
       });
       if (!res.ok) {
@@ -2155,23 +2178,7 @@ export default function PrintPage() {
                         <div className="flex flex-col border-b border-[var(--theme-border)] pb-2.5 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1">Спонсор</span><span className="text-xs text-[var(--theme-text)]">{selected.sponsorText}</span></div>
                       )}
                       {selected.storageCond && (
-                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1">
-                          <span className="text-[var(--theme-text-muted)] text-xs mb-1.5 flex items-center gap-2">
-                            Срок и условия
-                            {shelfLifeOverride !== null && (
-                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20" title={`Число месяцев переопределено на ${shelfLifeOverride}. В БД не сохраняется.`}>
-                                override {shelfLifeOverride} мес
-                              </span>
-                            )}
-                          </span>
-                          <span className={`text-xs text-[var(--theme-text)] leading-relaxed p-2 rounded-lg border ${
-                            shelfLifeOverride !== null
-                              ? "bg-amber-500/5 border-amber-500/30"
-                              : "bg-[var(--theme-input-bg)] border-[var(--theme-border)]"
-                          }`}>
-                            {effectiveStorageCond ?? selected.storageCond}
-                          </span>
-                        </div>
+                        <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Срок и условия </span><span className="text-xs text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)]">{selected.storageCond}</span></div>
                       )}
                       {selected.composition && (
                         <div className="flex flex-col border-b border-[var(--theme-border)] pb-3 pt-1"><span className="text-[var(--theme-text-muted)] text-xs mb-1.5">Состав</span><span className="text-xs text-justify text-[var(--theme-text)] leading-relaxed bg-[var(--theme-input-bg)] p-2 rounded-lg border border-[var(--theme-border)] whitespace-pre-wrap">{selected.composition}</span></div>
@@ -2271,68 +2278,44 @@ export default function PrintPage() {
                       <div className="flex items-center justify-between mb-1.5 min-h-[18px] gap-2">
                         <label className="block text-[10px] font-bold text-[var(--theme-text-muted)] tracking-wider">ГОДЕН ДО</label>
                         <div className="flex items-center gap-1.5">
-                          {/* Quick-switch срока хранения 6/9/12 мес. Активная —
-                              та что совпадает с effectiveShelfMonths. Клик
-                              переключает; клик по уже-активной override → сброс
-                              к авто (парсеру из storageCond). Ручной override
-                              даты (expDateOverrideStr) сбрасывается заодно —
-                              иначе он бы победил и пересчёт не поменял бы дату. */}
-                          {[6, 9, 12].map((m) => {
-                            const isActive = effectiveShelfMonths === m;
-                            const isOverrideOnThis = shelfLifeOverride === m;
-                            return (
-                              <button
-                                key={m}
-                                type="button"
-                                onClick={() => {
-                                  if (isOverrideOnThis || m === autoShelfMonths) {
-                                    // Клик на override той же цифры — снимаем.
-                                    // Клик на цифру, совпадающую с auto, тоже
-                                    // просто снимаем override (иначе визуально
-                                    // ничего не меняется, а бейдж становится
-                                    // амберным, что путает оператора).
-                                    setShelfLifeOverride(null);
-                                  } else {
-                                    setShelfLifeOverride(m);
+                          {/* Quick-switch срока хранения 6/9/12 мес. Активная
+                              (indigo) = текущий срок из storageCond товара.
+                              Клик по неактивной ПИШЕТ В БД: обновляет
+                              product.storageCond через PUT + местный state.
+                              Дальше срок держится между обновлениями страницы
+                              и печатью до следующего клика. Кликнуть повторно
+                              по активной — no-op (уже сохранено). Дополнительно
+                              показываем кнопку с исходным сроком из БД, если
+                              он не в {6,9,12} — чтобы не терять напр. 18/24. */}
+                          {(() => {
+                            const buttons: number[] = [6, 9, 12];
+                            if (!buttons.includes(autoShelfMonths)) buttons.push(autoShelfMonths);
+                            return buttons.map((m) => {
+                              const isActive = effectiveShelfMonths === m;
+                              const isSaving = savingShelf === m;
+                              return (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  disabled={savingShelf !== null}
+                                  onClick={() => {
                                     setExpDateOverrideStr(null);
-                                  }
-                                }}
-                                title={isOverrideOnThis ? "Клик — вернуть автоматический срок" : `Поставить срок ${m} мес`}
-                                className={`text-[10px] font-bold tabular-nums px-2 py-0.5 rounded border transition-all cursor-pointer ${
-                                  isActive
-                                    ? isOverrideOnThis
-                                      ? "bg-amber-500/15 text-amber-500 border-amber-500/40"
-                                      : "bg-indigo-500/15 text-indigo-500 border-indigo-500/40"
-                                    : "bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border-[var(--theme-border)] hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/30"
-                                }`}
-                              >
-                                {m}
-                              </button>
-                            );
-                          })}
-                          {/* Кнопка исходного (auto) значения — показываем ВСЕГДА,
-                              даже когда исходный срок = 6/9/12. Так у оператора
-                              есть явная точка возврата вместо непонятного
-                              «двойной клик = сброс». Особенно важно для 18/24/…
-                              мес — там кнопки 6/9/12 нет, и без этой ссылки
-                              вернуться к 24 мес было невозможно (баг v1.4.50). */}
-                          {(shelfLifeOverride !== null || ![6, 9, 12].includes(autoShelfMonths)) && (
-                            <button
-                              type="button"
-                              onClick={() => setShelfLifeOverride(null)}
-                              disabled={shelfLifeOverride === null}
-                              title={shelfLifeOverride !== null
-                                ? `Вернуть исходный срок ${autoShelfMonths} мес (из «Срок и условия»)`
-                                : `Исходный срок из «Срок и условия»: ${autoShelfMonths} мес`}
-                              className={`text-[10px] font-bold tabular-nums px-2 py-0.5 rounded border transition-all ${
-                                shelfLifeOverride !== null
-                                  ? "bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border-[var(--theme-border)] hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/30 cursor-pointer"
-                                  : "bg-indigo-500/15 text-indigo-500 border-indigo-500/40 cursor-default"
-                              }`}
-                            >
-                              {autoShelfMonths}
-                            </button>
-                          )}
+                                    saveShelfLife(m);
+                                  }}
+                                  title={isActive ? `Сейчас в товаре: ${m} мес` : `Изменить срок годности на ${m} мес и сохранить в БД`}
+                                  className={`text-[10px] font-bold tabular-nums px-2 py-0.5 rounded border transition-all ${
+                                    isActive
+                                      ? "bg-indigo-500/15 text-indigo-500 border-indigo-500/40 cursor-default"
+                                      : savingShelf !== null
+                                        ? "bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border-[var(--theme-border)] opacity-50 cursor-wait"
+                                        : "bg-[var(--theme-overlay)] text-[var(--theme-text-muted)] border-[var(--theme-border)] hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/30 cursor-pointer"
+                                  }`}
+                                >
+                                  {isSaving ? "…" : m}
+                                </button>
+                              );
+                            });
+                          })()}
                           {isExpDateManual && (
                             <button
                               type="button"
@@ -2374,9 +2357,7 @@ export default function PrintPage() {
                      <div ref={labelRef} className="scale-[0.8] sm:scale-90 origin-center transform-gpu transition-all z-10 p-4 bg-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
                       <div className="ring-1 ring-black/10 rounded overflow-hidden">
                         <LabelPreview
-                          product={shelfLifeOverride !== null
-                            ? { ...selected, storageCond: effectiveStorageCond }
-                            : selected}
+                          product={selected}
                           barcodeSvg={barcodeSvg}
                           widthMm={70}
                           heightMm={90}
