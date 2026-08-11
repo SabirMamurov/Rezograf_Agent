@@ -90,6 +90,26 @@ function parseShelfLifeMonths(storageCond: string | null): number {
   return 12;
 }
 
+// «6» → «месяцев», «1» → «месяц», «22» → «месяца», …
+function pluralMonths(n: number): string {
+  const mod100 = Math.abs(n) % 100;
+  const mod10 = Math.abs(n) % 10;
+  if (mod100 >= 11 && mod100 <= 14) return "месяцев";
+  if (mod10 === 1) return "месяц";
+  if (mod10 >= 2 && mod10 <= 4) return "месяца";
+  return "месяцев";
+}
+
+// Заменить в тексте условий хранения число месяцев на новое: «Срок годности 6
+// месяцев» → «Срок годности 9 месяцев». Меняем ПЕРВОЕ вхождение «\d+ месяц…»,
+// само слово «месяц/месяца/месяцев» тоже правим под новое число (иначе будет
+// «9 месяц» вместо «9 месяцев»). Если совпадений нет — возвращаем исходную
+// строку без изменений (не пытаемся угадать где вставить срок).
+function applyShelfLifeToStorageCond(cond: string | null, months: number): string | null {
+  if (!cond) return cond;
+  return cond.replace(/(\d+)\s*месяц(?:ев|а)?/i, `${months} ${pluralMonths(months)}`);
+}
+
 // ── Right-pane block ordering ──────────────────────────────────────────
 // Three blocks in the inspector pane that the user can drag-reorder.
 // Order is persisted per browser in localStorage; not synced across users.
@@ -402,6 +422,21 @@ export default function PrintPage() {
 
   const autoShelfMonths = parseShelfLifeMonths(selected?.storageCond ?? null);
   const effectiveShelfMonths = shelfLifeOverride ?? autoShelfMonths;
+  // Если оператор нажал 6/9/12 — подменяем число в самом тексте
+  // storageCond («Срок годности 6 месяцев» → «Срок годности 9 месяцев»).
+  // Иначе печатаемое условие противоречит дате «Годен до» — оператор
+  // видит «Срок годности 6 мес» и «Годен до 06.08.2027 (+12 мес)».
+  // Только в оверрайд-режиме — при auto шлём как есть, чтобы не задевать
+  // товары с нестандартной формулировкой storageCond.
+  const effectiveStorageCond = shelfLifeOverride !== null
+    ? applyShelfLifeToStorageCond(selected?.storageCond ?? null, shelfLifeOverride)
+    : (selected?.storageCond ?? null);
+  const previewProduct = useMemo(
+    () => (selected && shelfLifeOverride !== null
+      ? { ...selected, storageCond: effectiveStorageCond }
+      : selected),
+    [selected, shelfLifeOverride, effectiveStorageCond],
+  );
 
   const { mfgDateFormatted, expDateFormatted, autoExpDateStr } = useMemo(() => {
     if (!mfgDateStr) {
@@ -628,6 +663,9 @@ export default function PrintPage() {
           mfgDate: mfgToPrint,
           expDate: expToPrint,
           format: "image",
+          ...(shelfLifeOverride !== null && effectiveStorageCond != null
+            ? { storageCondOverride: effectiveStorageCond }
+            : {}),
         }),
       });
 
@@ -733,7 +771,7 @@ export default function PrintPage() {
       setToast({ type: "error", message: e.message || "Ошибка печати." });
       setRendering(false);
     }
-  }, [selected, mfgDateFormatted, expDateFormatted, mfgDateAuto, mfgDateStr, expDateOverrideStr]);
+  }, [selected, mfgDateFormatted, expDateFormatted, mfgDateAuto, mfgDateStr, expDateOverrideStr, shelfLifeOverride, effectiveStorageCond, effectiveShelfMonths]);
 
   const handleRenderPdf = async () => {
     if (!selected) return;
@@ -746,6 +784,9 @@ export default function PrintPage() {
           productId: selected.id,
           mfgDate: mfgDateFormatted,
           expDate: expDateFormatted,
+          ...(shelfLifeOverride !== null && effectiveStorageCond != null
+            ? { storageCondOverride: effectiveStorageCond }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -2310,7 +2351,7 @@ export default function PrintPage() {
                      <div ref={labelRef} className="scale-[0.8] sm:scale-90 origin-center transform-gpu transition-all z-10 p-4 bg-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
                       <div className="ring-1 ring-black/10 rounded overflow-hidden">
                         <LabelPreview
-                          product={selected}
+                          product={previewProduct}
                           barcodeSvg={barcodeSvg}
                           widthMm={70}
                           heightMm={90}

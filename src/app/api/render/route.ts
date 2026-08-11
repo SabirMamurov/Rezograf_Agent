@@ -171,7 +171,7 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { productId, mfgDate, expDate, format, productOverride, copies } = body;
+  const { productId, mfgDate, expDate, format, productOverride, copies, storageCondOverride } = body;
   const _renderStartMs = Date.now();
 
   // best-effort журнал печати — пишем после успешного рендера.
@@ -227,6 +227,15 @@ export async function POST(req: NextRequest) {
 
   if (!product) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  }
+
+  // Per-print override условий хранения — используется быстрым переключателем
+  // срока годности 6/9/12 мес в /print. Клиент присылает уже готовую строку с
+  // подмененным числом («…Срок годности 9 месяцев…»), сервер её просто
+  // подставляет вместо product.storageCond при рендере. БД не трогаем — это
+  // разовое переопределение на конкретную партию.
+  if (typeof storageCondOverride === "string") {
+    product = { ...product, storageCond: storageCondOverride };
   }
 
   // ITF-14 → bars-only SVG; the digits are added below as plain HTML
