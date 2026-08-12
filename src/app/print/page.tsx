@@ -110,6 +110,31 @@ function applyShelfLifeToStorageCond(cond: string | null, months: number): strin
   return cond.replace(/(\d+)\s*месяц(?:ев|а)?/i, `${months} ${pluralMonths(months)}`);
 }
 
+// Партнёры, у которых «Годен до» считается календарно (день = день изготовления,
+// меняется только месяц/год), а не через +N×30 дней как для остальных товаров.
+// По просьбе оператора (11 авг 2026): ИП Абдуалиев, ОРГАНИК новый значок,
+// Санфрутс, НЕВАДА, МП\ПЦПО. Регекс идёт по btwFilePath (сегмент папки).
+// Case-insensitive; матчится в любом уровне вложенности.
+const CALENDAR_SHELF_LIFE_FOLDER_RE = /\\(?:абдуалиев|органик[^\\]*значок|санфрутс|невада[^\\]*|пцпо)\\/i;
+
+function isCalendarShelfLifeProduct(p: { btwFilePath?: string | null } | null | undefined): boolean {
+  if (!p || typeof p.btwFilePath !== "string") return false;
+  return CALENDAR_SHELF_LIFE_FOLDER_RE.test(p.btwFilePath);
+}
+
+// Добавить N календарных месяцев к дате, сохраняя число месяца. Если в целевом
+// месяце нет такого числа (31 янв + 1 мес → 31 фев), сдвигаем на последний день
+// месяца, а не в следующий (JS `setMonth` по умолчанию перекатил бы на 3 марта).
+function addCalendarMonths(base: Date, months: number): Date {
+  const d = new Date(base);
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return d;
+}
+
 // ── Right-pane block ordering ──────────────────────────────────────────
 // Three blocks in the inspector pane that the user can drag-reorder.
 // Order is persisted per browser in localStorage; not synced across users.
@@ -430,13 +455,16 @@ export default function PrintPage() {
       return { mfgDateFormatted: "...", expDateFormatted: "...", autoExpDateStr: "" };
     }
     const mfg = new Date(mfgDateStr + "T00:00:00");
-    const auto = new Date(mfg);
-    // Treat 1 month as a fixed 30 days. The previous setMonth() approach
-    // followed the calendar (May→Sep keeps the same day-of-month), but real
-    // months are 28-31 days, so the actual elapsed time varied by ±2 days
-    // depending on which months the shelf life crossed. Operators expect
-    // "4 месяца" = exactly 120 days regardless of mfg date.
-    auto.setDate(auto.getDate() + effectiveShelfMonths * 30);
+    // Дефолт: 1 месяц = 30 дней (для всех обычных товаров, v1.4.36).
+    // Партнёрские папки (isCalendarShelfLifeProduct): день = день изготовления,
+    // меняется только месяц/год (по просьбе оператора 11 авг 2026).
+    const auto = isCalendarShelfLifeProduct(selected)
+      ? addCalendarMonths(mfg, effectiveShelfMonths)
+      : (() => {
+          const d = new Date(mfg);
+          d.setDate(d.getDate() + effectiveShelfMonths * 30);
+          return d;
+        })();
     // If the operator manually overrode the use-by date, that wins; otherwise
     // we use the auto-computed one.
     const exp = expDateOverrideStr
@@ -647,12 +675,16 @@ export default function PrintPage() {
         const today = new Date(todayInput + "T00:00:00");
         mfgToPrint = formatDate(today);
         if (expDateOverrideStr === null) {
-          const auto = new Date(today);
-          // Тот же 30-дней/мес алгоритм что и в useMemo — иначе превью и
-          // печать разошлись бы. Календарный setMonth здесь давал ±3
-          // дня разницы против 30-дневного расчёта наверху.
-          // effectiveShelfMonths учитывает быстрый переключатель 6/9/12.
-          auto.setDate(auto.getDate() + effectiveShelfMonths * 30);
+          // Тот же алгоритм что и в useMemo — иначе превью и печать
+          // разошлись бы. Для партнёрских папок — календарный расчёт,
+          // иначе +N×30 дней.
+          const auto = isCalendarShelfLifeProduct(selected)
+            ? addCalendarMonths(today, effectiveShelfMonths)
+            : (() => {
+                const d = new Date(today);
+                d.setDate(d.getDate() + effectiveShelfMonths * 30);
+                return d;
+              })();
           expToPrint = formatDate(auto);
         }
         setMfgDateStr(todayInput);
