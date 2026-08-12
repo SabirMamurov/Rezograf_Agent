@@ -112,14 +112,17 @@ function applyShelfLifeToStorageCond(cond: string | null, months: number): strin
 
 // Партнёры, у которых «Годен до» считается календарно (день = день изготовления,
 // меняется только месяц/год), а не через +N×30 дней как для остальных товаров.
-// По просьбе оператора (11 авг 2026): ИП Абдуалиев, ОРГАНИК новый значок,
-// Санфрутс, НЕВАДА, МП\ПЦПО. Регекс идёт по btwFilePath (сегмент папки).
-// Case-insensitive; матчится в любом уровне вложенности.
-const CALENDAR_SHELF_LIFE_FOLDER_RE = /\\(?:абдуалиев|органик[^\\]*значок|санфрутс|невада[^\\]*|пцпо)\\/i;
+// По просьбе оператора (11–12 авг 2026): ИП Абдуалиев, ОРГАНИК новый значок,
+// Санфрутс, НЕВАДА, МП\ПЦПО. Матчим по сегментам btwFilePath (case-insensitive),
+// имя файла (последний сегмент) пропускаем — чтобы товар не попал в «календарный»
+// режим из-за случайного слова в его названии.
+const CALENDAR_SHELF_LIFE_SEGMENT_RE = /(?:абду[аи]лиев|органик.*значок|санфрутс|невада|пцпо)/i;
 
 function isCalendarShelfLifeProduct(p: { btwFilePath?: string | null } | null | undefined): boolean {
   if (!p || typeof p.btwFilePath !== "string") return false;
-  return CALENDAR_SHELF_LIFE_FOLDER_RE.test(p.btwFilePath);
+  const segs = p.btwFilePath.split(/[\\/]/);
+  segs.pop(); // отбрасываем файл, оставляем только папки
+  return segs.some(s => CALENDAR_SHELF_LIFE_SEGMENT_RE.test(s));
 }
 
 // Добавить N календарных месяцев к дате, сохраняя число месяца. Если в целевом
