@@ -51,6 +51,16 @@ export async function PUT(
             : body.showLabelDates === false || body.showLabelDates === "off" || body.showLabelDates === "false"
               ? false
               : null,
+      // Тот же трёхпозиционный разбор, что и у showLabelDates:
+      // undefined → не трогаем, "on"/"off" из формы → true/false, иначе null (авто)
+      shelfLifeCalendar:
+        body.shelfLifeCalendar === undefined
+          ? undefined
+          : body.shelfLifeCalendar === true || body.shelfLifeCalendar === "on" || body.shelfLifeCalendar === "true"
+            ? true
+            : body.shelfLifeCalendar === false || body.shelfLifeCalendar === "off" || body.shelfLifeCalendar === "false"
+              ? false
+              : null,
       templateId: body.templateId ?? undefined,
     },
   });

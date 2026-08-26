@@ -60,6 +60,7 @@ interface Product {
   manufacturerType: string | null;
   showCedarLogo: boolean | null;
   showLabelDates: boolean | null;
+  shelfLifeCalendar: boolean | null;
   updatedAt?: string;
   template?: {
     widthMm: number;
@@ -118,8 +119,16 @@ function applyShelfLifeToStorageCond(cond: string | null, months: number): strin
 // режим из-за случайного слова в его названии.
 const CALENDAR_SHELF_LIFE_SEGMENT_RE = /(?:абду[аи]лиев|органик.*значок|санфрутс|невада|пцпо)/i;
 
-function isCalendarShelfLifeProduct(p: { btwFilePath?: string | null } | null | undefined): boolean {
-  if (!p || typeof p.btwFilePath !== "string") return false;
+function isCalendarShelfLifeProduct(
+  p: { btwFilePath?: string | null; shelfLifeCalendar?: boolean | null } | null | undefined,
+): boolean {
+  if (!p) return false;
+  // Явная настройка карточки перебивает правило по папке: у части позиций
+  // число дня обязано совпадать с датой изготовления независимо от того,
+  // где товар лежит (и наоборот — партнёрскому товару можно вернуть 30 дней).
+  if (p.shelfLifeCalendar === true) return true;
+  if (p.shelfLifeCalendar === false) return false;
+  if (typeof p.btwFilePath !== "string") return false;
   const segs = p.btwFilePath.split(/[\\/]/);
   segs.pop(); // отбрасываем файл, оставляем только папки
   return segs.some(s => CALENDAR_SHELF_LIFE_SEGMENT_RE.test(s));
@@ -478,7 +487,14 @@ export default function PrintPage() {
       expDateFormatted: formatDate(exp),
       autoExpDateStr: toInputDate(auto),
     };
-  }, [mfgDateStr, effectiveShelfMonths, expDateOverrideStr]);
+    // selected обязан быть в зависимостях: расчёт читает у товара путь папки
+    // и shelfLifeCalendar. Без него memo не пересчитывался при смене товара —
+    // дата изготовления по умолчанию всегда сегодняшняя, и если у нового
+    // товара тот же срок, все прочие зависимости совпадали, а «Годен до»
+    // оставался посчитанным для предыдущего товара. Ловилось только когда
+    // сроки различались, поэтому и прожило с v1.4.54.
+  }, [mfgDateStr, effectiveShelfMonths, expDateOverrideStr,
+      selected?.id, selected?.btwFilePath, selected?.shelfLifeCalendar]);
 
   const isExpDateManual = expDateOverrideStr !== null;
   // Value for <input type="date">. When override is active show that, otherwise
@@ -906,6 +922,13 @@ export default function PrintPage() {
         selected.showLabelDates === true
           ? true
           : selected.showLabelDates === false
+            ? false
+            : null,
+      // shelfLifeCalendar: null = авто (по папке), true = календарно, false = 30 дней/мес
+      shelfLifeCalendar:
+        selected.shelfLifeCalendar === true
+          ? true
+          : selected.shelfLifeCalendar === false
             ? false
             : null,
     });
@@ -2131,6 +2154,39 @@ export default function PrintPage() {
                       <div>
                         <div className="p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)]">
                           <div className="flex flex-col mb-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Как считать «Годен до»</span>
+                            <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">«По календарю» — число дня остаётся тем же, меняются только месяц и год: 26.08.2026 + 12 мес = 26.08.2027. «По 30 дней» — 12 мес = 360 дней, и число сдвигается: 21.08.2027. В режиме «Авто» по календарю считаются партнёрские папки (ИП Абдуалиев, ОРГАНИК новый значок, Санфрутс, НЕВАДА, МП\ПЦПО), остальные — по 30 дней.</span>
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            {([
+                              { v: null, label: "Авто" },
+                              { v: true, label: "По календарю" },
+                              { v: false, label: "По 30 дней" },
+                            ] as const).map((opt, i) => {
+                              const current = editForm.shelfLifeCalendar ?? null;
+                              const active = current === opt.v;
+                              return (
+                                <label
+                                  key={i}
+                                  className={`flex-1 min-w-[100px] flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors ${active ? "bg-cyan-500/10 border-cyan-500/40 text-[var(--theme-text)]" : "bg-transparent border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-cyan-500/40"}`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="shelfLifeCalendar"
+                                    className="w-4 h-4 accent-cyan-500 cursor-pointer"
+                                    checked={active}
+                                    onChange={() => setEditForm({ ...editForm, shelfLifeCalendar: opt.v })}
+                                  />
+                                  <span className="text-xs font-semibold">{opt.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="p-2.5 rounded-xl bg-[var(--theme-input-bg)] border border-[var(--theme-border)]">
+                          <div className="flex flex-col mb-2">
                             <span className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text)]">Производитель</span>
                             <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">Какой блок «Изготовитель» печатается на этикетке. По умолчанию — Эко-фабрика. Переключите, если товар выпускается под ИП Абдуалиев.</span>
                           </div>
@@ -2246,6 +2302,21 @@ export default function PrintPage() {
                             <span className="text-[var(--theme-text-muted)] text-xs">Даты</span>
                             <span className={`font-bold text-[10px] tracking-wider px-2 py-1 rounded-md ${showDates ? "bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400"}`}>
                               {showDates ? "Печатаются" : "Скрыты"}{!explicit && <span className="ml-1 opacity-60 font-normal">(авто)</span>}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                      {(() => {
+                        // Зеркало переключателя «Как считать Годен до» из формы
+                        // редактирования: без этой строки оператор, выставив
+                        // календарный режим, не видел бы его в режиме просмотра.
+                        const explicitCal = selected.shelfLifeCalendar === true || selected.shelfLifeCalendar === false;
+                        const calendar = isCalendarShelfLifeProduct(selected);
+                        return (
+                          <div className="flex justify-between border-b border-[var(--theme-border)] pb-2.5 pt-1">
+                            <span className="text-[var(--theme-text-muted)] text-xs">Расчёт «Годен до»</span>
+                            <span className={`font-bold text-[10px] tracking-wider px-2 py-1 rounded-md ${calendar ? "bg-cyan-500/15 border border-cyan-500/40 text-cyan-600 dark:text-cyan-400" : "bg-[var(--theme-overlay)] border border-[var(--theme-border)] text-[var(--theme-text-muted)]"}`}>
+                              {calendar ? "По календарю" : "По 30 дней"}{!explicitCal && <span className="ml-1 opacity-60 font-normal">(авто)</span>}
                             </span>
                           </div>
                         );
