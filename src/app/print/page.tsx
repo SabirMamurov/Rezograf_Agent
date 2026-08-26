@@ -249,6 +249,17 @@ export default function PrintPage() {
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoving, setBulkMoving] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Массовое редактирование полей. Открытая форма живёт в bulkEditOpen,
+  // bulkEditFields — какие поля оператор отметил к применению, bulkEditValues —
+  // что именно записать. Отмеченность хранится отдельно от значения намеренно:
+  // пустое значение у отмеченного поля означает «очистить», а неотмеченное
+  // поле не трогается вовсе. Без этого разделения массовая правка одного
+  // поля затирала бы все остальные пустыми строками.
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditFields, setBulkEditFields] = useState<Set<string>>(new Set());
+  const [bulkEditValues, setBulkEditValues] = useState<Record<string, unknown>>({});
+  const [bulkEditing, setBulkEditing] = useState(false);
+  const [bulkEditProgress, setBulkEditProgress] = useState({ done: 0, total: 0 });
 
   // Лёгкое переименование «имя файла» — единственная операция, разрешённая
   // без режима редактирования (без пароля). Эндпоинт /api/products/[id]/rename
@@ -1216,6 +1227,139 @@ export default function PrintPage() {
     setCurrentPath(targetPath);
   };
 
+  // ── Массовое редактирование полей ───────────────────────────────────
+  // Какие поля можно править пачкой. Намеренно НЕ включены: name, sku,
+  // barcodeEan13 и btwFilePath — они уникальны для каждой этикетки, и
+  // одинаковое значение на пачке товаров сделало бы каталог неразличимым.
+  const BULK_EDIT_FIELDS: {
+    key: string;
+    label: string;
+    kind: "text" | "textarea" | "select" | "tristate";
+    hint?: string;
+    options?: { value: string; label: string }[];
+  }[] = [
+    { key: "storageCond", label: "Срок и условия хранения", kind: "textarea",
+      hint: "Из этой строки берётся число месяцев для расчёта «Годен до»" },
+    { key: "composition", label: "Состав", kind: "textarea" },
+    { key: "nutritionalInfo", label: "КБЖУ", kind: "textarea" },
+    { key: "weight", label: "Масса", kind: "text" },
+    { key: "quantity", label: "Количество", kind: "text" },
+    { key: "boxWeight", label: "Вес места", kind: "text" },
+    { key: "certCode", label: "Стандарт (СТО/ТУ)", kind: "text" },
+    { key: "sponsorText", label: "Текст спонсора", kind: "textarea" },
+    { key: "extraText", label: "Дополнительный текст", kind: "textarea" },
+    { key: "manufacturerType", label: "Изготовитель", kind: "select", options: [
+      { value: "ekofabrika", label: "ООО «Эко-фабрика»" },
+      { value: "abdualiev", label: "ИП Абдуалиев В.Г." },
+    ] },
+    { key: "isExport", label: "Маркетплейс (водяной знак «МП»)", kind: "select", options: [
+      { value: "true", label: "Печатать" },
+      { value: "false", label: "Не печатать" },
+    ] },
+    { key: "isShkLabel", label: "Этикетка ШК (сдвоенная)", kind: "select", options: [
+      { value: "true", label: "Да" },
+      { value: "false", label: "Нет" },
+    ] },
+    { key: "showCedarLogo", label: "Логотип «Сибирский Кедр»", kind: "select", options: [
+      { value: "true", label: "Показывать" },
+      { value: "false", label: "Не показывать" },
+    ] },
+    { key: "showLabelDates", label: "Даты изготовления/годен до", kind: "tristate",
+      hint: "Авто — скрыты в весовых папках, показаны в остальных" },
+    { key: "shelfLifeCalendar", label: "Как считать «Годен до»", kind: "tristate",
+      hint: "Авто — календарно для партнёрских папок, иначе 30 дней/мес",
+      options: [
+        { value: "true", label: "По календарю" },
+        { value: "false", label: "По 30 дней" },
+      ] },
+  ];
+
+  const openBulkEdit = () => {
+    setBulkEditFields(new Set());
+    setBulkEditValues({});
+    setBulkEditProgress({ done: 0, total: 0 });
+    setBulkEditOpen(true);
+  };
+
+  const toggleBulkField = (key: string) => {
+    setBulkEditFields(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+        // Значение по умолчанию, чтобы отмеченное поле не ушло в PATCH
+        // как undefined и не превратилось в «ничего не менять».
+        setBulkEditValues(v => (key in v ? v : { ...v, [key]: "" }));
+      }
+      return next;
+    });
+  };
+
+  // Применяет отмеченные поля ко всем выбранным товарам. Идём последовательно:
+  // PATCH пишет журнал правок на каждый товар, и параллельный залп на сотне
+  // позиций упирался бы в SQLite-блокировку.
+  const applyBulkEdit = async () => {
+    const keys = Array.from(bulkEditFields);
+    if (keys.length === 0 || bulkSelectedIds.size === 0) return;
+
+    const patch: Record<string, unknown> = {};
+    for (const k of keys) {
+      const raw = bulkEditValues[k];
+      const meta = BULK_EDIT_FIELDS.find(f => f.key === k);
+      if (meta?.kind === "select" && (k === "isExport" || k === "isShkLabel" || k === "showCedarLogo")) {
+        patch[k] = raw === "true" || raw === true;
+      } else if (meta?.kind === "tristate") {
+        // "" → null (авто), иначе строка "true"/"false" — сервер разберёт сам
+        patch[k] = raw === "" || raw == null ? null : raw;
+      } else {
+        patch[k] = raw ?? "";
+      }
+    }
+
+    const ids = Array.from(bulkSelectedIds);
+    setBulkEditing(true);
+    setBulkEditProgress({ done: 0, total: ids.length });
+    let ok = 0;
+    const failed: string[] = [];
+    for (const id of ids) {
+      try {
+        const res = await fetch("/api/products", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, ...patch }),
+        });
+        if (res.ok) ok += 1; else failed.push(id);
+      } catch {
+        failed.push(id);
+      }
+      setBulkEditProgress(prev => ({ ...prev, done: prev.done + 1 }));
+    }
+    setBulkEditing(false);
+    setBulkEditOpen(false);
+
+    // Перечитываем папку, чтобы список и инспектор показали новые значения
+    loadFolderData();
+    if (selected && bulkSelectedIds.has(selected.id)) {
+      try {
+        const r = await fetch(`/api/products/${selected.id}`);
+        if (r.ok) setSelected(await r.json());
+      } catch { /* инспектор обновится при следующем выборе */ }
+    }
+
+    if (failed.length === 0) {
+      clearBulkSelected();
+      setToast({ message: `Изменено товаров: ${ok}`, type: "success" });
+    } else {
+      // Выделение НЕ сбрасываем — оператор видит, на чём остановиться,
+      // и может повторить только для неудавшихся.
+      setToast({
+        message: `Изменено ${ok} из ${ids.length}, не удалось ${failed.length}`,
+        type: ok === 0 ? "error" : "success",
+      });
+    }
+  };
+
   // Массовое удаление: проходим по ids и DELETE'аем каждый. Подтверждение
   // запрашивается через тот же модальный confirmDelete, что у одиночного
   // удаления — onConfirm зашивает handleBulkDelete с уже зафиксированным
@@ -1777,6 +1921,14 @@ export default function PrintPage() {
                   Выбрано товаров: <span className="font-bold text-cyan-600 dark:text-cyan-300">{bulkSelectedIds.size}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={openBulkEdit}
+                    disabled={bulkEditing}
+                    className="col-span-2 py-2.5 px-3 text-[11px] font-bold uppercase tracking-wide bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-xl shadow-sm transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    Изменить поля
+                  </button>
                   <button
                     onClick={openBulkMoveFolder}
                     disabled={bulkMoving || movingItemUrl}
@@ -2706,6 +2858,133 @@ export default function PrintPage() {
               <button onClick={saveRenameFile} disabled={savingRename || !renameFileName.trim()} className="px-5 py-2 text-sm font-bold bg-amber-500 text-white hover:bg-amber-400 rounded-lg shadow-sm transition-colors disabled:opacity-50">
                 {savingRename ? "Сохранение…" : "Сохранить"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Массовое изменение полей. Работает только в edit-режиме — плашка,
+          из которой открывается, отрисовывается под isAdmin. Ключевое
+          правило: применяются ТОЛЬКО отмеченные поля, остальные у товаров
+          не трогаются. Поэтому у каждого поля свой чекбокс, а не просто
+          пустая форма — иначе одна массовая правка затёрла бы всё прочее. */}
+      {bulkEditOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { if (!bulkEditing) setBulkEditOpen(false); }}>
+          <div className="bg-[var(--color-surface-panel)] border border-[var(--theme-border)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-5 pb-4 border-b border-[var(--theme-border)]">
+              <h2 className="text-lg font-bold text-[var(--theme-text)]">Изменить поля у выбранных товаров</h2>
+              <div className="text-xs text-[var(--theme-text-muted)] mt-1">
+                Выбрано товаров: <span className="font-bold text-cyan-600 dark:text-cyan-300">{bulkSelectedIds.size}</span>.
+                Отметьте галочкой то, что нужно поменять — остальные поля останутся как есть.
+                Отмеченное поле с пустым значением очистит его у всех выбранных.
+              </div>
+            </div>
+
+            <div className="px-6 py-4 overflow-y-auto custom-scrollbar flex flex-col gap-3">
+              {BULK_EDIT_FIELDS.map(f => {
+                const checked = bulkEditFields.has(f.key);
+                const val = bulkEditValues[f.key];
+                return (
+                  <div key={f.key} className={`p-3 rounded-xl border transition-colors ${checked ? "bg-cyan-500/5 border-cyan-500/40" : "bg-[var(--theme-input-bg)] border-[var(--theme-border)]"}`}>
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 mt-0.5 accent-cyan-500 cursor-pointer shrink-0"
+                        checked={checked}
+                        onChange={() => toggleBulkField(f.key)}
+                      />
+                      <span className="flex flex-col">
+                        <span className="text-xs font-bold text-[var(--theme-text)]">{f.label}</span>
+                        {f.hint && <span className="text-[11px] text-[var(--theme-text-muted)] mt-0.5">{f.hint}</span>}
+                      </span>
+                    </label>
+
+                    {checked && (
+                      <div className="mt-2.5">
+                        {f.kind === "textarea" && (
+                          <textarea
+                            className="input-field w-full text-sm"
+                            rows={3}
+                            value={String(val ?? "")}
+                            onChange={e => setBulkEditValues(v => ({ ...v, [f.key]: e.target.value }))}
+                            placeholder="Оставьте пустым, чтобы очистить поле у всех выбранных"
+                          />
+                        )}
+                        {f.kind === "text" && (
+                          <input
+                            type="text"
+                            className="input-field w-full text-sm"
+                            value={String(val ?? "")}
+                            onChange={e => setBulkEditValues(v => ({ ...v, [f.key]: e.target.value }))}
+                            placeholder="Оставьте пустым, чтобы очистить поле у всех выбранных"
+                          />
+                        )}
+                        {f.kind === "select" && (
+                          <div className="flex gap-2 flex-wrap">
+                            {(f.options ?? []).map(o => (
+                              <label key={o.value} className={`flex-1 min-w-[130px] flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors ${String(val) === o.value ? "bg-cyan-500/10 border-cyan-500/40 text-[var(--theme-text)]" : "bg-transparent border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-cyan-500/40"}`}>
+                                <input
+                                  type="radio"
+                                  name={`bulk-${f.key}`}
+                                  className="w-4 h-4 accent-cyan-500 cursor-pointer"
+                                  checked={String(val) === o.value}
+                                  onChange={() => setBulkEditValues(v => ({ ...v, [f.key]: o.value }))}
+                                />
+                                <span className="text-xs font-semibold">{o.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        {f.kind === "tristate" && (
+                          <div className="flex gap-2 flex-wrap">
+                            {[{ value: "", label: "Авто" },
+                              ...(f.options ?? [{ value: "true", label: "Показать" }, { value: "false", label: "Скрыть" }])
+                            ].map(o => (
+                              <label key={o.value} className={`flex-1 min-w-[110px] flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg border transition-colors ${String(val ?? "") === o.value ? "bg-cyan-500/10 border-cyan-500/40 text-[var(--theme-text)]" : "bg-transparent border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:border-cyan-500/40"}`}>
+                                <input
+                                  type="radio"
+                                  name={`bulk-${f.key}`}
+                                  className="w-4 h-4 accent-cyan-500 cursor-pointer"
+                                  checked={String(val ?? "") === o.value}
+                                  onChange={() => setBulkEditValues(v => ({ ...v, [f.key]: o.value }))}
+                                />
+                                <span className="text-xs font-semibold">{o.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="px-6 py-4 border-t border-[var(--theme-border)] flex items-center justify-between gap-3">
+              <div className="text-xs text-[var(--theme-text-muted)]">
+                {bulkEditing
+                  ? `Применяю… ${bulkEditProgress.done} из ${bulkEditProgress.total}`
+                  : bulkEditFields.size === 0
+                    ? "Ничего не отмечено"
+                    : `Будет изменено полей: ${bulkEditFields.size}`}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setBulkEditOpen(false)}
+                  disabled={bulkEditing}
+                  className="px-4 py-2 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text)] rounded-lg hover:bg-[var(--theme-overlay)] transition-colors disabled:opacity-50"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={applyBulkEdit}
+                  disabled={bulkEditing || bulkEditFields.size === 0}
+                  className="px-5 py-2 text-sm font-bold bg-cyan-500 text-white hover:bg-cyan-400 rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {bulkEditing && <div className="spinner border-white" />}
+                  Применить к {bulkSelectedIds.size}
+                </button>
+              </div>
             </div>
           </div>
         </div>
