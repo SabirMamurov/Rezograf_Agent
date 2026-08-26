@@ -218,6 +218,19 @@ export async function PATCH(req: NextRequest) {
           ? false
           : null;
   }
+  if ("shelfLifeCalendar" in data) {
+    // Как считать «Годен до»: null → авто (по папке), true → календарно
+    // (число дня сохраняется), false → 30 дней/мес. Разбор тот же, что у
+    // showLabelDates. Форма редактирования сохраняется именно этим PATCH —
+    // без этой ветки переключатель молча сбрасывался в «Авто» (v1.4.56).
+    const c = data.shelfLifeCalendar;
+    updateData.shelfLifeCalendar =
+      c === true || c === "on" || c === "true"
+        ? true
+        : c === false || c === "off" || c === "false"
+          ? false
+          : null;
+  }
   // Normalize barcode on edit too: if operator types 13 digits with '2' prefix
   // → save 14-digit ITF-14 with computed check; if 12 digits → save 13-digit
   // EAN-13 with check. Mirrors the rule applied to existing data.
