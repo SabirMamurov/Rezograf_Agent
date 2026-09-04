@@ -90,6 +90,11 @@ function SpreadDigits({
  * - Increased font sizes for better readability after printing
  * - Removed composition duplication when it matches product name
  */
+// Зазор между половинами сдвоенной ШК-этикетки, мм. 10 px = 1 мм в
+// виртуальной системе координат. Дубль SHK_GAP_MM из /api/render/route.ts —
+// превью и печать обязаны совпадать пиксель в пиксель.
+const SHK_GAP_MM = 6;
+
 export default function LabelPreview({
   product,
   barcodeSvg,
@@ -160,6 +165,32 @@ export default function LabelPreview({
       setAutoFitDone(true);
     }
   }, [shrinkScale, autoFitDone, product, mfgDate, expDate]);
+
+  // ── ШК: подгонка каждой половины под свою высоту ──────────────────
+  // Зазор между половинами держится, только если содержимое не вылезает
+  // за свою половину. При длинном названии оно вылезало и съедало полосу.
+  // Ужимаем ТОЛЬКО ту половину, что не влезла — зеркало логики в
+  // /api/render/route.ts, иначе превью разойдётся с печатью.
+  const shkTopRef = React.useRef<HTMLDivElement>(null);
+  const shkBotRef = React.useRef<HTMLDivElement>(null);
+  const [shkHalfScale, setShkHalfScale] = React.useState<[number, number]>([1, 1]);
+
+  React.useEffect(() => {
+    const measure = (el: HTMLDivElement | null): number => {
+      if (!el || !el.parentElement) return 1;
+      const parent = el.parentElement;
+      const cs = getComputedStyle(parent);
+      const avail =
+        parent.clientHeight -
+        parseFloat(cs.paddingTop || "0") -
+        parseFloat(cs.paddingBottom || "0");
+      const need = el.scrollHeight;
+      return need > avail && avail > 0 ? avail / need : 1;
+    };
+    const next: [number, number] = [measure(shkTopRef.current), measure(shkBotRef.current)];
+    setShkHalfScale(prev =>
+      Math.abs(prev[0] - next[0]) < 0.001 && Math.abs(prev[1] - next[1]) < 0.001 ? prev : next);
+  }, [product, mfgDate, expDate, barcodeSvg]);
 
   const showComposition = !isCompositionDuplicate(product.name, product.composition);
 
@@ -391,6 +422,13 @@ export default function LabelPreview({
                 )}
               </>
             );
+            const shkFitStyle: React.CSSProperties = {
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              transformOrigin: "center center",
+            };
             const halfStyle: React.CSSProperties = {
               position: "relative",
               zIndex: 1,
@@ -415,15 +453,24 @@ export default function LabelPreview({
                   height: V_HEIGHT + "px",
                   display: "flex",
                   flexDirection: "column",
+                  // Пустая полоса между половинами — по ней режут ножницами.
+                  // Холст фиксирован, поэтому зазор забирается у самих
+                  // половин: flex: 1 1 0 делит ОСТАТОК. Зеркало SHK_GAP_MM
+                  // из route.ts — менять только вместе с ним.
+                  gap: SHK_GAP_MM * 10 + "px",
                   boxSizing: "border-box",
                 }}
               >
-                <div style={halfStyle}>{halfContent}</div>
+                <div style={halfStyle}>
+                  <div ref={shkTopRef} style={{ ...shkFitStyle, transform: `scale(${shkHalfScale[0]})` }}>{halfContent}</div>
+                </div>
                 {/* No separator — operator wants just the same prod-style
                     layout duplicated. They've decided to forgo the
                     cut-line marker. Bottom half gets extra padding-bottom
                     so the digits don't fall off the sticker edge. */}
-                <div style={{ ...halfStyle, padding: "24px 24px 80px" }}>{halfContent}</div>
+                <div style={{ ...halfStyle, padding: "24px 24px 80px" }}>
+                  <div ref={shkBotRef} style={{ ...shkFitStyle, transform: `scale(${shkHalfScale[1]})` }}>{halfContent}</div>
+                </div>
               </div>
             );
           })()}

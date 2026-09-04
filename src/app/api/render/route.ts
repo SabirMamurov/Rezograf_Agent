@@ -400,6 +400,31 @@ export async function POST(req: NextRequest) {
       product?.showLabelDates === false ||
       (product?.showLabelDates !== true && isWeightFolderForScale);
 
+    // ── ШК: подгонка каждой половины отдельно ────────────────────────
+    // Зазор между половинами (SHK_GAP_MM) держится только если содержимое
+    // не вылезает за свою половину. При длинном названии оно вылезало и
+    // съедало полосу: замеры дали разброс видимого пробела 1–15 мм вместо
+    // заявленного 10. Ужимаем ТОЛЬКО ту половину, что не влезла — короткие
+    // этикетки остаются прежнего размера.
+    if (isShkForScale) {
+      await page.evaluate(() => {
+        document.querySelectorAll(".shk-half").forEach((half) => {
+          const h = half as HTMLElement;
+          const fit = h.querySelector(".shk-fit") as HTMLElement | null;
+          if (!fit) return;
+          const cs = getComputedStyle(h);
+          const avail =
+            h.clientHeight -
+            parseFloat(cs.paddingTop || "0") -
+            parseFloat(cs.paddingBottom || "0");
+          const need = fit.scrollHeight;
+          if (need > avail && avail > 0) {
+            fit.style.transform = `scale(${avail / need})`;
+          }
+        });
+      });
+    }
+
     if (contentHeight > vHeight) {
       // Existing shrink-to-fit path
       const shrink = vHeight / contentHeight;
@@ -617,6 +642,10 @@ function loadIconsAsBase64(): Record<string, string> {
  *
  * Visuals must mirror LabelPreview.tsx ШК branch.
  */
+// Зазор между половинами сдвоенной ШК-этикетки, мм. Полоса пустая — по ней
+// режут ножницами. Виртуальная система координат: 10 px = 1 мм.
+const SHK_GAP_MM = 6;
+
 function buildShkLabelHtml(
   product: any,
   barcodeSvg: string,
@@ -684,8 +713,13 @@ ${fontStyleBlock}
   .outer { width: ${widthMm}mm; height: ${heightMm}mm; overflow: hidden; }
   /* Two stacked halves. Per operator request the prod-style layout
      should just appear twice on one 70×90 mm sticker — same content,
-     no separator. flex-column distributes them 50/50. */
-  .canvas { width: ${widthMm * 10}px; height: ${heightMm * 10}px; box-sizing: border-box; position: relative; display: flex; flex-direction: column; }
+     no separator.
+     Между половинами пустая полоса SHK_GAP_MM мм: этикетку режут по ней
+     ножницами, и без зазора рез задевал цифры штрихкода нижней половины.
+     Холст фиксирован 70×90 мм, поэтому зазор забирается у самих половин:
+     flex: 1 1 0 делит между ними ОСТАТОК, то есть каждая ужимается на
+     половину зазора (при 10 мм: 450 → 400 виртуальных px). */
+  .canvas { width: ${widthMm * 10}px; height: ${heightMm * 10}px; box-sizing: border-box; position: relative; display: flex; flex-direction: column; gap: ${SHK_GAP_MM * 10}px; }
   .shk-half {
     flex: 1 1 0;
     min-height: 0;
@@ -740,6 +774,12 @@ ${fontStyleBlock}
     z-index: 0;
   }
   .shk-half { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; color: black; }
+  /* Обёртка содержимого половины. Нужна, чтобы ужать ТОЛЬКО ту половину,
+     которая не влезает, не трогая вторую и не сдвигая зазор: масштаб
+     вешается на неё, а сама половина остаётся 400 px и держит границы
+     пустой полосы. Подгонка считается в JS после вёрстки — см.
+     _JS_FIT_SHK_HALVES ниже. */
+  .shk-fit { width: 100%; display: flex; flex-direction: column; align-items: center; transform-origin: center center; }
   /* Title and subtitle sizes are emitted per-render via inline style
      (computed from title length above). Default values here just cover
      the case where the inline override is missing. */
@@ -803,24 +843,24 @@ ${fontStyleBlock}
     <div class="canvas">
       ${isExport ? `<div class="export-mark">МП</div>` : ""}
       <!-- Top half — full title/subtitle/barcode copy. -->
-      <div class="shk-half">
+      <div class="shk-half"><div class="shk-fit">
         <div class="shk-title">${escapeHtml(title)}</div>
         ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         <div class="shk-barcode">
           ${barcodeSvg ? `<div>${barcodeSvg.replace(/<svg\s/i, '<svg preserveAspectRatio="none" ')}</div>` : ""}
         </div>
         ${separateBarcodeDigits ? (wideBarcodeDigits ? spreadDigitsHtml(separateBarcodeDigits, 36, "width: 88%; align-self: center; margin-top: 8px; flex: 0 0 auto;") : `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>`) : ""}
-      </div>
+      </div></div>
       <!-- Bottom half — identical copy stacked directly below, no
            separator (operator request: just duplicate, no cut-line). -->
-      <div class="shk-half">
+      <div class="shk-half"><div class="shk-fit">
         <div class="shk-title">${escapeHtml(title)}</div>
         ${subtitle ? `<div class="shk-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         <div class="shk-barcode">
           ${barcodeSvg ? `<div>${barcodeSvg.replace(/<svg\s/i, '<svg preserveAspectRatio="none" ')}</div>` : ""}
         </div>
         ${separateBarcodeDigits ? (wideBarcodeDigits ? spreadDigitsHtml(separateBarcodeDigits, 36, "width: 88%; align-self: center; margin-top: 8px; flex: 0 0 auto;") : `<div class="shk-barcode-digits">${escapeHtml(separateBarcodeDigits)}</div>`) : ""}
-      </div>
+      </div></div>
     </div>
   </div>
 </body>
